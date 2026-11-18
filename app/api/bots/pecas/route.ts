@@ -1,0 +1,104 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+import { NextResponse } from "next/server";
+import { slugPeca } from "@/lib/caminho";
+import { criarClienteServico } from "@/lib/supabase/admin";
+import { PILARES, STATUS_PECA, TIPOS_PECA } from "@/lib/tipos";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type Corpo = {
+  praca_id?: string;
+  data?: string;
+  horario?: string | null;
+  tipo?: string;
+  titulo?: string;
+  legenda?: string;
+  cta?: string | null;
+  pilar?: string;
+  status?: string;
+};
+
+export async function POST(request: Request) {
+  const admin = criarClienteServico();
+  if (!admin) {
+    return NextResponse.json(
+      { erro: "Serviço indisponível. Falta SUPABASE_SERVICE_ROLE_KEY no servidor." },
+      { status: 503 },
+    );
+  }
+
+  const cabecalho = request.headers.get("authorization") ?? "";
+  const chave = cabecalho.toLowerCase().startsWith("bearer ") ? cabecalho.slice(7).trim() : "";
+  if (!chave) {
+    return NextResponse.json({ erro: "Chave ausente." }, { status: 401 });
+  }
+
+  const hash = createHash("sha256").update(chave).digest("hex");
+  const { data: bots, error: erroBusca } = await admin
+    .from("registro_bots")
+    .select("id, chave_hash, ativo")
+    .eq("chave_hash", hash)
+    .eq("ativo", true)
+    .limit(1);
+
+  if (erroBusca) {
+    return NextResponse.json({ erro: "Não foi possível validar a chave." }, { status: 500 });
+  }
+
+  const bot = bots?.[0];
+  const armazenado = Buffer.from(bot?.chave_hash ?? "");
+  const calculado = Buffer.from(hash);
+  const confere = armazenado.length === calculado.length && timingSafeEqual(armazenado, calculado);
+  if (!bot || !confere) {
+    return NextResponse.json({ erro: "Chave recusada." }, { status: 401 });
+  }
+
+  let corpo: Corpo;
+  try {
+    corpo = (await request.json()) as Corpo;
+  } catch {
+    return NextResponse.json({ erro: "JSON inválido." }, { status: 400 });
+  }
+
+  const tipo = corpo.tipo ?? "reels";
+  const pilar = corpo.pilar ?? "espetaculo";
+  const status = corpo.status ?? "ideia";
+  if (!corpo.praca_id || !corpo.data || !/^\d{4}-\d{2}-\d{2}$/.test(corpo.data)) {
+    return NextResponse.json({ erro: "Informe praca_id e data (AAAA-MM-DD)." }, { status: 400 });
+  }
+  if (!TIPOS_PECA.includes(tipo as (typeof TIPOS_PECA)[number])) {
+    return NextResponse.json({ erro: "Formato desconhecido." }, { status: 400 });
+  }
+  if (!PILARES.includes(pilar as (typeof PILARES)[number])) {
+    return NextResponse.json({ erro: "Pilar desconhecido." }, { status: 400 });
+  }
+  if (!STATUS_PECA.includes(status as (typeof STATUS_PECA)[number])) {
+    return NextResponse.json({ erro: "Estado desconhecido." }, { status: 400 });
+  }
+
+  const { data: criada, error } = await admin
+    .from("pecas")
+    .insert({
+      praca_id: corpo.praca_id,
+      data: corpo.data,
+      horario: corpo.horario || null,
+      tipo,
+      titulo: corpo.titulo ?? "",
+      legenda: corpo.legenda ?? "",
+      cta: corpo.cta || null,
+      pilar,
+      status,
+      slug: slugPeca(tipo),
+    })
+    .select("id")
+    .single();
+
+  if (error || !criada) {
+    return NextResponse.json({ erro: "Não foi possível criar a peça." }, { status: 400 });
+  }
+
+  await admin.from("registro_bots").update({ ultimo_uso_em: new Date().toISOString() }).eq("id", bot.id);
+
+  return NextResponse.json({ id: criada.id }, { status: 201 });
+}
