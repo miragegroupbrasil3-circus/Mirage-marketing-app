@@ -1,5 +1,5 @@
 import { diasDaSemana, hojeISO, segundaDaSemana, somarDias } from "@/lib/datas";
-import type { Comentario, ItemHistorico, Midia, Peca, Praca, Sessao } from "@/lib/tipos";
+import type { Comentario, ItemHistorico, Membro, Midia, Peca, Praca, Sessao } from "@/lib/tipos";
 
 export const ID_PRACA_EXEMPLO = "11111111-1111-4111-8111-111111111111";
 export const ID_USUARIO_EXEMPLO = "00000000-0000-4000-8000-000000000001";
@@ -7,7 +7,39 @@ export const ID_USUARIO_EXEMPLO = "00000000-0000-4000-8000-000000000001";
 export const sessaoExemplo: Sessao = {
   id: ID_USUARIO_EXEMPLO,
   nome: "Prévia",
+  status: "aprovado",
 };
+
+export const membrosExemplo: Membro[] = [
+  {
+    id: ID_USUARIO_EXEMPLO,
+    nome: "Prévia",
+    email: "previa@exemplo.mirage",
+    status: "aprovado",
+    criado_em: "2026-11-01T15:00:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000002",
+    nome: "Lia",
+    email: "lia@exemplo.mirage",
+    status: "aprovado",
+    criado_em: "2026-11-03T18:30:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000003",
+    nome: "Nuno",
+    email: "nuno@exemplo.mirage",
+    status: "pendente",
+    criado_em: "2026-11-18T11:05:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000004",
+    nome: "Caio",
+    email: "caio@exemplo.mirage",
+    status: "recusado",
+    criado_em: "2026-11-12T09:20:00.000Z",
+  },
+];
 
 export const pracaExemplo: Praca = {
   id: ID_PRACA_EXEMPLO,

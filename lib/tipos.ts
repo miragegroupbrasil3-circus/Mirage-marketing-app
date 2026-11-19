@@ -76,11 +76,29 @@ export type ItemHistorico = {
   autor_nome: string;
 };
 
+export const STATUS_PERFIL = ["pendente", "aprovado", "recusado"] as const;
+
+export type StatusPerfil = (typeof STATUS_PERFIL)[number];
+
+export type Membro = {
+  id: string;
+  nome: string;
+  email: string | null;
+  status: StatusPerfil;
+  criado_em: string;
+};
+
 export type Sessao = {
   id: string;
   nome: string;
+  status: StatusPerfil;
   semPerfil?: boolean;
 };
+
+export function normalizarStatus(valor: unknown): StatusPerfil {
+  if (valor === "aprovado" || valor === "recusado" || valor === "pendente") return valor;
+  return "pendente";
+}
 
 export const LIMITE_ARQUIVO = 50 * 1024 * 1024;
 

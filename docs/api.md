@@ -4,6 +4,32 @@ Rascunho do contrato. A rota já existe e responde, mas só funciona depois que 
 
 A chave do bot nunca vai para o navegador. O app guarda só o SHA-256 em hexadecimal (UTF-8) na coluna `chave_hash`.
 
+## Acesso da equipe
+
+O cadastro em Authentication fica aberto. Quem usa o app com a sessão de pessoa passa por `perfis.status`:
+
+| Status | O que pode |
+| --- | --- |
+| `pendente` | Ler só a própria linha em `perfis`. A tela fica em “Aguardando aprovação”. |
+| `aprovado` | Ler e escrever o app, inclusive a lista da equipe. |
+| `recusado` | Ler só a própria linha. A tela diz “Acesso não liberado”. |
+
+`private.tem_perfil()` é a função das policies. Ela só devolve verdadeiro quando a linha existe e o status é `aprovado`. Isso fecha praças, semanas, peças, mídias, comentários, histórico e o bucket `midias` para quem ainda não foi aceito.
+
+A primeira conta, quando não há ninguém aprovado, nasce `aprovado`. As outras nascem `pendente`. O e-mail fica copiado em `perfis.email` para a página Equipe. Quem não está aprovado não lista os outros.
+
+Mudar status, `aprovado_por` ou `aprovado_em` por `UPDATE` é recusado pelo gatilho e pela policy. O caminho é o RPC, só para `authenticated` (o papel `anon` não executa):
+
+```
+public.aprovar_membro(id uuid, novo_status text)
+```
+
+Quem chama precisa estar aprovado. O alvo não pode ser a própria pessoa. `novo_status` é `pendente`, `aprovado` ou `recusado`. A função grava `aprovado_por = auth.uid()` e `aprovado_em = now()`. Não apaga linha.
+
+A página Equipe escuta Realtime em `perfis`. A tela de espera escuta a própria linha e entra na grade quando o status vira `aprovado`.
+
+Os bots não usam essa sessão. `POST /api/bots/pecas` grava com a service role, que não passa pelas policies de membro. A aprovação não bloqueia o bot e o bot não aprova ninguém.
+
 ## Autenticação
 
 Cada bot tem a sua chave. Envie:
