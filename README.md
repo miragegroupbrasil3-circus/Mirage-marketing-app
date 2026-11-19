@@ -1,8 +1,8 @@
 # Mirage
 
-Grade interna do Mirage Circus. Três pessoas da equipe entram com e-mail e senha, escolhem a praça e organizam o que vai ao ar. Não há cadastro público.
+Grade interna do Mirage Circus. A pessoa cria a conta com e-mail e senha, ou entra numa conta que já existe. A primeira conta fica aprovada. As seguintes esperam alguém da equipe liberar o acesso, na página Equipe.
 
-Todo mundo que tem perfil faz a mesma coisa: editar peças, subir mídia, comentar e cuidar das praças. A coluna `perfis.papel` existe com o padrão `equipe` e não autoriza nada.
+Quem está aprovado faz a mesma coisa: editar peças, subir mídia, comentar e cuidar das praças. A coluna `perfis.papel` existe com o padrão `equipe` e não autoriza nada. Quem autoriza é `perfis.status`.
 
 ## Rodar
 
@@ -41,24 +41,32 @@ Aplicar nesta ordem, no SQL editor do Supabase ou pelo MCP:
 1. `supabase/migrations/20261118120000_esquema.sql`
 2. `supabase/migrations/20261118120100_storage_realtime.sql`
 3. `supabase/migrations/20261118120200_seed_exemplo.sql` (opcional)
+4. `supabase/migrations/20261119145522_aprovacao_membros.sql`
 
-A terceira cria uma praça chamada Exemplo, inativa, sem datas e sem peças. Dá para pular.
+A terceira cria uma praça chamada Exemplo, inativa, sem datas e sem peças. Dá para pular. A quarta é a aprovação: sem ela, quem entra não passa da tela de espera.
 
 O que isso prepara:
 
 - Tabelas `perfis`, `pracas`, `semanas`, `pecas`, `midias`, `comentarios`, `historico`, `registro_bots`.
-- Perfil criado no cadastro, com `papel = equipe`.
-- RLS: anônimo não lê. Quem está autenticado e tem perfil lê e escreve o app inteiro, inclusive praças. `historico` só é lido; quem grava é o gatilho. `registro_bots` não tem policy (só a service role).
+- Perfil criado no cadastro, com `papel = equipe`. O status nasce `aprovado` só se ainda não houver ninguém aprovado. Senão, `pendente`.
+- Linhas de `perfis` que já existiam na hora da quarta migration ficam `aprovado`. Rodar o arquivo de novo não aprova quem chegou depois.
+- RLS: anônimo não lê. `private.tem_perfil()` só é verdadeiro com `status = aprovado`. Pendente e recusado leem a própria linha de `perfis` (a tela de espera) e mais nada: praças, peças, mídia, comentários, histórico e o bucket `midias` ficam fechados.
+- Status não muda por `UPDATE`. A página Equipe chama `public.aprovar_membro(id, novo_status)`. Quem chama precisa estar aprovado e não pode decidir o próprio acesso. A função grava `aprovado_por` e `aprovado_em`.
+- `historico` só é lido; quem grava é o gatilho. `registro_bots` não tem policy (só a service role, que não passa por essa aprovação).
 - Bucket privado `midias`, 50 MB por arquivo. Caminho `praca/semana/dia/peca/arquivo`.
-- Realtime em `pecas`, `midias` e `comentarios`.
+- Realtime em `pecas`, `midias`, `comentarios` e `perfis`.
 
-## Criar as três pessoas
+## Contas
 
-No Supabase: Authentication → Users → Add user. E-mail e senha, com confirmação automática. Repita para as três contas.
+Em Authentication → Providers → Email, deixe o cadastro público ligado. A tela `/login` tem Entrar e Criar conta. O controle de quem vê a grade é o status no banco, não o interruptor do Auth.
 
-Em Authentication → Providers → Email, desligue o cadastro público. O app não tem tela de inscrição.
+A primeira conta entra direto. As outras veem “Aguardando aprovação” até alguém aprovar em Equipe. Recusar mostra “Acesso não liberado”. As duas telas escutam o Realtime da própria linha e abrem a grade se o status mudar.
 
-O gatilho `criar_perfil_no_cadastro` cria a linha em `perfis`. Para ajustar o nome:
+Na página Equipe, quem já está aprovado vê os pedidos (nome, e-mail, data de cadastro), aprova ou recusa, e vê quem já entrou. O número ao lado de Equipe é quantos estão pendentes. Dá para aprovar de novo alguém que foi recusado. Ninguém apaga perfil, e ninguém muda o próprio status.
+
+Se a confirmação de e-mail estiver ligada no Auth, a pessoa confirma e só então entra com a senha. Com a confirmação desligada, a sessão abre na hora e cai na espera ou na grade.
+
+O gatilho `criar_perfil_no_cadastro` cria a linha em `perfis`, com o nome pedido no cadastro. Para ajustar o nome de quem já entrou:
 
 ```sql
 update public.perfis
@@ -66,7 +74,7 @@ update public.perfis
  where id = 'uuid-do-usuario';
 ```
 
-Não há papel de admin. As três contas fazem o mesmo.
+Não use `UPDATE` para mudar `status`. O gatilho recusa. O caminho é a página Equipe.
 
 ## Logo
 

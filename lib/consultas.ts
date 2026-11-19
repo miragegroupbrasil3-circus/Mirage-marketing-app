@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { criarCliente } from "@/lib/supabase/server";
 import { previewAtivo } from "@/lib/preview";
@@ -5,12 +6,13 @@ import {
   comentariosExemplo,
   historicoExemplo,
   ID_PRACA_EXEMPLO,
+  membrosExemplo,
   midiasExemplo,
   pecasExemplo,
   pracaExemplo,
   sessaoExemplo,
 } from "@/lib/exemplo";
-import type { Comentario, ItemHistorico, Midia, Peca, Praca, Sessao } from "@/lib/tipos";
+import { normalizarStatus, type Comentario, type ItemHistorico, type Membro, type Midia, type Peca, type Praca, type Sessao } from "@/lib/tipos";
 
 export const COOKIE_PRACA = "mirage-praca";
 
@@ -67,23 +69,57 @@ function mapearPeca(linha: Record<string, unknown>): Peca {
   };
 }
 
-export async function obterSessao(): Promise<Sessao | null> {
+export const obterSessao = cache(async (): Promise<Sessao | null> => {
   if (previewAtivo()) return sessaoExemplo;
   const supabase = await criarCliente();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
-  const { data: perfil } = await supabase.from("perfis").select("nome").eq("id", data.user.id).maybeSingle();
-  if (!perfil) return { id: data.user.id, nome: "Equipe", semPerfil: true };
-  return { id: data.user.id, nome: perfil.nome };
-}
+  const { data: perfil, error } = await supabase
+    .from("perfis")
+    .select("nome, status")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  if (error || !perfil) {
+    return { id: data.user.id, nome: "Equipe", status: "pendente", semPerfil: true };
+  }
+  return { id: data.user.id, nome: perfil.nome, status: normalizarStatus(perfil.status) };
+});
 
-export async function listarPracas(): Promise<Praca[]> {
+export const listarMembros = cache(async (): Promise<Membro[]> => {
+  if (previewAtivo()) return membrosExemplo.map((membro) => ({ ...membro }));
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("perfis")
+    .select("id, nome, email, status, criado_em")
+    .order("criado_em", { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((linha) => ({
+    id: String(linha.id),
+    nome: String(linha.nome ?? "Equipe"),
+    email: linha.email == null || linha.email === "" ? null : String(linha.email),
+    status: normalizarStatus(linha.status),
+    criado_em: String(linha.criado_em),
+  }));
+});
+
+export const contarPendentes = cache(async (): Promise<number> => {
+  if (previewAtivo()) return membrosExemplo.filter((membro) => membro.status === "pendente").length;
+  const supabase = await criarCliente();
+  const { count, error } = await supabase
+    .from("perfis")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pendente");
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+});
+
+export const listarPracas = cache(async (): Promise<Praca[]> => {
   if (previewAtivo()) return [pracaExemplo];
   const supabase = await criarCliente();
   const { data, error } = await supabase.from("pracas").select("*").order("cidade");
   if (error) throw new Error(error.message);
   return (data ?? []) as Praca[];
-}
+});
 
 export async function pracaAtiva(pracas: Praca[]) {
   const store = await cookies();
