@@ -78,7 +78,9 @@ Não use `UPDATE` para mudar `status`. O gatilho recusa. O caminho é a página 
 
 ## Logo
 
-Até o arquivo oficial chegar, a marca é a palavra MIRAGE. Coloque o arquivo em `public/logo.png` ou `public/logo.svg` e o componente `components/marca/logo.tsx` passa a usá-lo.
+A marca oficial é `public/brand/logo-mirage.png` (fundo preto, sem transparência). `components/marca/logo.tsx` mostra esse arquivo com `next/image`, em WebP ou AVIF, no tamanho da tela.
+
+Os ícones do PWA estão em `public/icons/icon-192.png`, `public/icons/icon-512.png` e `public/apple-touch-icon.png`. O manifesto usa `purpose: any`.
 
 ## Mídia
 
@@ -91,5 +93,3 @@ npm run dev
 npm run lint
 npm run build
 ```
-
-Os ícones do PWA saem de `node scripts/gerar-icones.mjs`.

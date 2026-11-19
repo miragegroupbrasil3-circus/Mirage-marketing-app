@@ -1,26 +1,52 @@
-import fs from "node:fs";
-import path from "node:path";
+import Image from "next/image";
 
-type Props = {
-  className?: string;
+const SRC = "/brand/logo-mirage.png";
+const LARGURA = 1328;
+const ALTURA = 508;
+
+type Tamanho = "cabecalho" | "acesso" | "repouso";
+
+const VISUAL: Record<
+  Tamanho,
+  { caixa: string; imagem: string; style: { width: string; height: string }; sizes: string }
+> = {
+  cabecalho: {
+    caixa: "block h-9 w-[94px] shrink-0 md:h-11 md:w-[115px]",
+    imagem: "block h-full w-full bg-transparent object-contain",
+    style: { width: "100%", height: "100%" },
+    sizes: "(max-width: 768px) 94px, 115px",
+  },
+  acesso: {
+    caixa: "block w-full",
+    imagem: "block h-auto w-full bg-transparent",
+    style: { width: "100%", height: "auto" },
+    sizes: "(max-width: 640px) 88vw, 24rem",
+  },
+  repouso: {
+    caixa: "mx-auto block w-full max-w-72",
+    imagem: "block h-auto w-full bg-transparent",
+    style: { width: "100%", height: "auto" },
+    sizes: "18rem",
+  },
 };
 
-/**
- * Enquanto o arquivo oficial não chega, a marca é a palavra MIRAGE.
- * Coloque o arquivo em public/logo.png ou public/logo.svg para substituí-la.
- */
-export function Logo({ className = "" }: Props) {
-  const png = path.join(process.cwd(), "public", "logo.png");
-  const svg = path.join(process.cwd(), "public", "logo.svg");
-  const arquivo = fs.existsSync(png) ? "/logo.png" : fs.existsSync(svg) ? "/logo.svg" : null;
+export function Logo({ tamanho = "cabecalho", preload = false }: { tamanho?: Tamanho; preload?: boolean }) {
+  const visual = VISUAL[tamanho];
 
-  if (arquivo) {
-    return (
-      // O arquivo pode ser SVG; next/image não cobre esse slot sem configuração extra.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={arquivo} alt="Mirage" className={`h-[0.72em] w-auto ${className}`} />
-    );
-  }
-
-  return <span className={`font-display leading-none tracking-[-0.03em] text-gold ${className}`}>MIRAGE</span>;
+  return (
+    <span className={visual.caixa}>
+      <Image
+        src={SRC}
+        alt="Mirage Circus"
+        width={LARGURA}
+        height={ALTURA}
+        sizes={visual.sizes}
+        quality={90}
+        preload={preload}
+        loading={preload ? undefined : "eager"}
+        className={visual.imagem}
+        style={visual.style}
+      />
+    </span>
+  );
 }
