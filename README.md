@@ -42,8 +42,9 @@ Aplicar nesta ordem, no SQL editor do Supabase ou pelo MCP:
 2. `supabase/migrations/20261118120100_storage_realtime.sql`
 3. `supabase/migrations/20261118120200_seed_exemplo.sql` (opcional)
 4. `supabase/migrations/20261119145522_aprovacao_membros.sql`
+5. `supabase/migrations/20261119235900_pecas_concluido.sql`
 
-A terceira cria uma praça chamada Exemplo, inativa, sem datas e sem peças. Dá para pular. A quarta é a aprovação: sem ela, quem entra não passa da tela de espera.
+A terceira cria uma praça chamada Exemplo, inativa, sem datas e sem peças. Dá para pular. A quarta é a aprovação: sem ela, quem entra não passa da tela de espera. A quinta marca conclusão nas peças (`concluido`, `concluido_por`, `concluido_em`). Sem ela, o botão Concluir não grava. Bot não conclui: só uma pessoa aprovada.
 
 O que isso prepara:
 

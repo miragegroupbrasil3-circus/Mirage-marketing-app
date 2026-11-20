@@ -8,7 +8,7 @@ export default function PaginaOffline() {
       <Logo tamanho="repouso" />
       <h1 className="font-display text-4xl text-gold">Sem conexão</h1>
       <p className="texto max-w-[28rem] text-paper">A grade volta quando a rede voltar.</p>
-      <a href="/hoje" className="botao">
+      <a href="/calendario" className="botao">
         Tentar de novo
       </a>
     </main>

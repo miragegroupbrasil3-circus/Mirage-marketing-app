@@ -91,6 +91,8 @@ Cria uma peça na praça indicada. Quem grava é o service role, no servidor. O 
 | `pilar` | não | `espetaculo`, `estrutura`, `vida_no_circo`, `publico`. Padrão: `espetaculo` |
 | `status` | não | `ideia`, `em_producao`, `pronto`, `publicado`. Padrão: `ideia` |
 
+`concluido`, `concluido_por` e `concluido_em` não entram neste corpo. Se algum deles vier no JSON, a rota responde `400`. Bot não conclui peça. Quem conclui é uma pessoa aprovada, no app. O gatilho `private.guardar_conclusao` também ignora esses campos quando `auth.uid()` é nulo, que é o caso da service role.
+
 A semana é criada pelo gatilho, a partir da data. O `slug` do caminho de mídia é gerado na rota.
 
 ### Respostas
@@ -101,13 +103,31 @@ A semana é criada pelo gatilho, a partir da data. O `slug` do caminho de mídia
 { "id": "uuid-da-peca" }
 ```
 
-`400` corpo inválido ou a praça não existe.
+`400` corpo inválido, a praça não existe, ou o bot tentou marcar `concluido`.
 
 `401` chave ausente ou recusada.
 
 `503` falta `SUPABASE_SERVICE_ROLE_KEY`.
 
 Erros vêm como `{ "erro": "mensagem em português" }`.
+
+## Conclusão
+
+Colunas em `pecas`, adicionadas pela migration `20261119235900_pecas_concluido.sql`:
+
+| Coluna | Tipo | Quem grava |
+| --- | --- | --- |
+| `concluido` | `boolean not null default false` | só pessoa autenticada com perfil aprovado |
+| `concluido_por` | `uuid` → `perfis(id)` | o gatilho, com `auth.uid()` |
+| `concluido_em` | `timestamptz` | o gatilho, com `now()` |
+
+O app manda apenas `{ "concluido": true }` ou `{ "concluido": false }`. O gatilho preenche ou limpa `concluido_por` e `concluido_em`. Não dá para atribuir a conclusão a outra pessoa. Se o perfil for apagado, `concluido_por` fica nulo e a peça continua concluída.
+
+Bot não marca conclusão. `POST /api/bots/pecas` recusa o corpo que traga esses campos. A peça criada pelo bot nasce com `concluido = false`. Um `UPDATE` feito pela service role não fecha nem reabre a peça, porque `auth.uid()` é nulo.
+
+O histórico da peça registra a mudança (`concluido`, e os campos que o gatilho ajustou), com o autor da sessão. A policy continua `private.tem_perfil()`: pendente e recusado não leem nem escrevem peças.
+
+As métricas do Instagram não têm tabela ainda. A página Métricas só desenha gráfico de peças. O bloco do @miragecircusbrasil fica vazio até o Mirage Insights passar a enviar dados. Não inventar números nessa tela.
 
 ## O que fica para a Fase 2
 

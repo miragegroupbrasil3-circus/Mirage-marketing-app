@@ -52,12 +52,36 @@ export const pracaExemplo: Praca = {
   e_exemplo: true,
 };
 
-function peca(parcial: Omit<Peca, "praca_id" | "semana_id" | "legenda" | "cta" | "criado_por" | "atualizado_por" | "criado_em" | "atualizado_em"> & { legenda?: string; cta?: string | null }): Peca {
+function peca(
+  parcial: Omit<
+    Peca,
+    | "praca_id"
+    | "semana_id"
+    | "legenda"
+    | "cta"
+    | "criado_por"
+    | "atualizado_por"
+    | "criado_em"
+    | "atualizado_em"
+    | "concluido"
+    | "concluido_por"
+    | "concluido_em"
+  > & {
+    legenda?: string;
+    cta?: string | null;
+    concluido?: boolean;
+    concluido_por?: string | null;
+    concluido_em?: string | null;
+  },
+): Peca {
   return {
     praca_id: ID_PRACA_EXEMPLO,
     semana_id: null,
     legenda: parcial.legenda ?? "",
     cta: parcial.cta ?? null,
+    concluido: false,
+    concluido_por: null,
+    concluido_em: null,
     criado_por: ID_USUARIO_EXEMPLO,
     atualizado_por: ID_USUARIO_EXEMPLO,
     criado_em: "2026-11-18T12:00:00.000Z",
@@ -119,6 +143,9 @@ export function pecasExemplo(segunda = segundaDaSemana(hojeISO())): Peca[] {
       titulo: "Quando o público sai, a rotina continua.",
       pilar: "vida_no_circo",
       status: "publicado",
+      concluido: true,
+      concluido_por: ID_USUARIO_EXEMPLO,
+      concluido_em: "2026-11-18T18:00:00.000Z",
       ordem: 0,
       slug: "reels-02",
     }),

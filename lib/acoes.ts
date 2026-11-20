@@ -14,7 +14,7 @@ type RespostaAcesso = { erro?: string; aviso?: string };
 
 function destinoSeguro(valor: FormDataEntryValue | null) {
   const texto = String(valor ?? "");
-  if (!texto.startsWith("/") || texto.startsWith("//") || texto.includes("\\")) return "/hoje";
+  if (!texto.startsWith("/") || texto.startsWith("//") || texto.includes("\\")) return "/calendario";
   return texto;
 }
 
@@ -32,7 +32,7 @@ async function destinoDepoisDoAcesso(
 
 export async function entrar(formData: FormData): Promise<RespostaAcesso> {
   if (previewAtivo()) {
-    redirect("/hoje");
+    redirect("/calendario");
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

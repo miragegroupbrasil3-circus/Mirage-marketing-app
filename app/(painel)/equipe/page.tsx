@@ -1,3 +1,4 @@
+import { Titulo } from "@/components/motion/titulo";
 import { ListaEquipe } from "@/components/equipe/lista";
 import { listarMembros, obterSessao } from "@/lib/consultas";
 import { previewAtivo } from "@/lib/preview";
@@ -12,7 +13,7 @@ export default async function PaginaEquipe() {
 
   return (
     <div>
-      <h1 className="font-display mb-12 text-5xl text-gold sm:text-6xl">Equipe</h1>
+      <Titulo className="mb-12">Equipe</Titulo>
       <ListaEquipe key={chave} iniciais={membros} meuId={sessao?.id ?? ""} preview={previewAtivo()} />
     </div>
   );

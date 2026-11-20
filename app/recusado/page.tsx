@@ -12,7 +12,7 @@ export default async function PaginaRecusado() {
 
   const sessao = await obterSessao();
   if (!sessao) redirect("/login");
-  if (sessao.status === "aprovado") redirect("/hoje");
+  if (sessao.status === "aprovado") redirect("/calendario");
   if (sessao.status === "pendente") redirect("/aguardando");
 
   return <TelaAcesso modo="recusado" usuarioId={sessao.id} />;

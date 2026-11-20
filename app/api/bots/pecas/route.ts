@@ -54,12 +54,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ erro: "Chave recusada." }, { status: 401 });
   }
 
-  let corpo: Corpo;
+  let bruto: Record<string, unknown>;
   try {
-    corpo = (await request.json()) as Corpo;
+    const lido: unknown = await request.json();
+    if (!lido || typeof lido !== "object" || Array.isArray(lido)) {
+      return NextResponse.json({ erro: "JSON inválido." }, { status: 400 });
+    }
+    bruto = lido as Record<string, unknown>;
   } catch {
     return NextResponse.json({ erro: "JSON inválido." }, { status: 400 });
   }
+
+  if ("concluido" in bruto || "concluido_por" in bruto || "concluido_em" in bruto) {
+    return NextResponse.json(
+      { erro: "Bots não marcam peça como concluída. Só uma pessoa da equipe conclui." },
+      { status: 400 },
+    );
+  }
+
+  const corpo = bruto as Corpo;
 
   const tipo = corpo.tipo ?? "reels";
   const pilar = corpo.pilar ?? "espetaculo";
