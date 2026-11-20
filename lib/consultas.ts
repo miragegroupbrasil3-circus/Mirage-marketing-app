@@ -12,7 +12,7 @@ import {
   pracaExemplo,
   sessaoExemplo,
 } from "@/lib/exemplo";
-import { normalizarStatus, type Comentario, type ItemHistorico, type Membro, type Midia, type Peca, type Praca, type Sessao } from "@/lib/tipos";
+import { normalizarStatus, type Comentario, type ItemHistorico, type Membro, type Midia, type Peca, type PecaLista, type Praca, type ResumoPeca, type Sessao } from "@/lib/tipos";
 
 export const COOKIE_PRACA = "mirage-praca";
 
@@ -60,6 +60,9 @@ function mapearPeca(linha: Record<string, unknown>): Peca {
     cta: linha.cta == null ? null : String(linha.cta),
     pilar: linha.pilar as Peca["pilar"],
     status: linha.status as Peca["status"],
+    concluido: Boolean(linha.concluido),
+    concluido_por: linha.concluido_por == null ? null : String(linha.concluido_por),
+    concluido_em: linha.concluido_em == null ? null : String(linha.concluido_em),
     ordem: Number(linha.ordem ?? 0),
     slug: String(linha.slug),
     criado_por: linha.criado_por == null ? null : String(linha.criado_por),
@@ -127,20 +130,35 @@ export async function pracaAtiva(pracas: Praca[]) {
   return pracas.find((praca) => praca.id === escolhida) ?? pracas.find((praca) => praca.ativa) ?? pracas[0] ?? null;
 }
 
-export async function pecasNoIntervalo(pracaId: string, inicio: string, fim: string) {
+function contarNotas(bruto: unknown) {
+  if (!Array.isArray(bruto) || bruto.length === 0) return 0;
+  const primeiro = bruto[0];
+  if (primeiro && typeof primeiro === "object" && "count" in primeiro) {
+    return Number((primeiro as { count: number }).count) || 0;
+  }
+  return bruto.length;
+}
+
+function enriquecerExemplo(peca: Peca): PecaLista {
+  return {
+    ...peca,
+    midiaFinal: midiasExemplo(peca.id).find((midia) => midia.e_final) ?? null,
+    notas: comentariosExemplo(peca.id).length,
+  };
+}
+
+export async function pecasNoIntervalo(pracaId: string, inicio: string, fim: string, ancoraHoje = false): Promise<PecaLista[]> {
   if (previewAtivo()) {
-    return pecasExemplo(inicio)
+    const origem = ancoraHoje ? pecasExemplo() : pecasExemplo(inicio);
+    return origem
       .filter((peca) => peca.praca_id === pracaId && peca.data >= inicio && peca.data <= fim)
-      .map((peca) => ({
-        ...peca,
-        midiaFinal: midiasExemplo(peca.id).find((midia) => midia.e_final) ?? null,
-      }));
+      .map(enriquecerExemplo);
   }
 
   const supabase = await criarCliente();
   const { data, error } = await supabase
     .from("pecas")
-    .select("*, midias(id, peca_id, storage_path, tipo, versao, e_final, largura, altura, duracao_segundos, nome_arquivo, mime, bytes, criado_em)")
+    .select("*, midias(id, peca_id, storage_path, tipo, versao, e_final, largura, altura, duracao_segundos, nome_arquivo, mime, bytes, criado_em), comentarios(count)")
     .eq("praca_id", pracaId)
     .gte("data", inicio)
     .lte("data", fim)
@@ -148,7 +166,7 @@ export async function pecasNoIntervalo(pracaId: string, inicio: string, fim: str
 
   if (error) throw new Error(error.message);
 
-  const linhas = (data ?? []) as Array<Record<string, unknown> & { midias?: Record<string, unknown>[] }>;
+  const linhas = (data ?? []) as Array<Record<string, unknown> & { midias?: Record<string, unknown>[]; comentarios?: unknown }>;
   const finais = linhas.flatMap((linha) => (linha.midias ?? []).filter((midia) => midia.e_final));
   const urls = await assinar(finais.map((midia) => String(midia.storage_path)));
 
@@ -157,8 +175,45 @@ export async function pecasNoIntervalo(pracaId: string, inicio: string, fim: str
     return {
       ...mapearPeca(linha),
       midiaFinal: final ? mapearMidia(final, urls.get(String(final.storage_path)) ?? null) : null,
+      notas: contarNotas(linha.comentarios),
     };
   });
+}
+
+function mapearResumo(linha: Record<string, unknown>): ResumoPeca {
+  return {
+    id: String(linha.id),
+    data: String(linha.data),
+    tipo: linha.tipo as ResumoPeca["tipo"],
+    status: linha.status as ResumoPeca["status"],
+    concluido: Boolean(linha.concluido),
+    concluido_por: linha.concluido_por == null ? null : String(linha.concluido_por),
+    titulo: String(linha.titulo ?? ""),
+  };
+}
+
+export async function listarResumo(pracaId: string): Promise<ResumoPeca[]> {
+  if (previewAtivo()) {
+    return pecasExemplo()
+      .filter((peca) => peca.praca_id === pracaId)
+      .map((peca) => ({
+        id: peca.id,
+        data: peca.data,
+        tipo: peca.tipo,
+        status: peca.status,
+        concluido: peca.concluido,
+        concluido_por: peca.concluido_por,
+        titulo: peca.titulo,
+      }));
+  }
+
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("pecas")
+    .select("id, data, tipo, status, concluido, concluido_por, titulo")
+    .eq("praca_id", pracaId);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Record<string, unknown>[]).map(mapearResumo);
 }
 
 export async function obterPeca(id: string) {

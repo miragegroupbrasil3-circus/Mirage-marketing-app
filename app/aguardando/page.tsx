@@ -12,7 +12,7 @@ export default async function PaginaAguardando() {
 
   const sessao = await obterSessao();
   if (!sessao) redirect("/login");
-  if (sessao.status === "aprovado") redirect("/hoje");
+  if (sessao.status === "aprovado") redirect("/calendario");
   if (sessao.status === "recusado") redirect("/recusado");
 
   return <TelaAcesso modo="pendente" usuarioId={sessao.id} />;

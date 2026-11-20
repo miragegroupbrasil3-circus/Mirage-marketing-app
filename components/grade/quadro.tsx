@@ -29,10 +29,12 @@ import { horarioCurto, rotuloDia, rotuloDiaCurto, rotuloNumero, somarDias } from
 import { slugPeca } from "@/lib/caminho";
 import { ROTULO_PILAR, ROTULO_STATUS, ROTULO_TIPO } from "@/lib/rotulos";
 import { cx } from "@/lib/cx";
-import type { Midia, Peca, StatusPeca } from "@/lib/tipos";
+import { FaixaProgresso } from "@/components/progresso/faixa";
+import { COR_STATUS, COR_TIPO } from "@/lib/cores";
+import type { PecaLista, StatusPeca } from "@/lib/tipos";
 import { STATUS_PECA } from "@/lib/tipos";
 
-export type PecaGrade = Peca & { midiaFinal: Midia | null };
+export type PecaGrade = PecaLista;
 
 type Visao = "dia" | "status";
 
@@ -53,7 +55,7 @@ export function Quadro({
   preview: boolean;
   foco: string;
 }) {
-  const chave = iniciais.map((peca) => `${peca.id}:${peca.data}:${peca.status}:${peca.ordem}:${peca.titulo}:${peca.horario}`).join("|");
+  const chave = iniciais.map((peca) => `${peca.id}:${peca.data}:${peca.status}:${peca.ordem}:${peca.titulo}:${peca.horario}:${peca.concluido}:${peca.notas}`).join("|");
   return <QuadroVivo key={chave} iniciais={iniciais} dias={dias} visao={visao} pracaId={pracaId} preview={preview} foco={foco} />;
 }
 
@@ -202,9 +204,13 @@ function QuadroVivo({
           slug: slugPeca(tipo),
           criado_por: null,
           atualizado_por: null,
+          concluido: false,
+          concluido_por: null,
+          concluido_em: null,
           criado_em: agora,
           atualizado_em: agora,
           midiaFinal: null,
+          notas: 0,
         },
       ]);
       return;
@@ -234,12 +240,20 @@ function QuadroVivo({
       <p className="sr-only" aria-live="polite">
         {anuncio}
       </p>
+      <div className="cartao-circo mb-8 rounded-3xl p-4">
+        <FaixaProgresso
+          feitas={pecas.filter((peca) => peca.concluido).length}
+          total={pecas.length}
+          rotulo="Concluídas nesta grade"
+        />
+      </div>
       {erro ? (
         <p role="alert" className="mb-4 text-gold">
           {erro}
         </p>
       ) : null}
       <DndContext
+        id="grade"
         sensors={sensores}
         collisionDetection={closestCorners}
         onDragStart={(evento: DragStartEvent) => setAtivoId(String(evento.active.id))}
@@ -344,7 +358,7 @@ function Cartao({ peca }: { peca: PecaGrade }) {
     transition,
   };
   return (
-    <article ref={setNodeRef} style={estilo} className={cx("border border-line-soft bg-ink", isDragging && "opacity-40")}>
+    <article ref={setNodeRef} style={estilo} className={cx("cartao-circo rounded-2xl", isDragging && "opacity-40")}>
       <div className="flex items-start">
         <button
           type="button"
@@ -377,14 +391,17 @@ function CartaoConteudo({ peca, overlay = false }: { peca: PecaGrade; overlay?: 
       ) : (
         <Moldura className="mb-2 hidden h-14 w-10 md:block" />
       )}
+      <span className="mb-2 block h-1 rounded-full" style={{ background: COR_TIPO[peca.tipo] }} />
       <span className="block text-paper">{peca.titulo || "Sem título"}</span>
       <span className="mt-2 flex flex-col text-sm text-mist">
         {horarioCurto(peca.horario) ? <span className="num">{horarioCurto(peca.horario)}</span> : null}
         <span>{ROTULO_TIPO[peca.tipo]}</span>
         <span>{ROTULO_PILAR[peca.pilar]}</span>
       </span>
-      <span className={peca.status === "pronto" || peca.status === "publicado" ? "mt-2 block text-sm text-gold" : "mt-2 block text-sm text-mist"}>
+      <span className="mt-2 flex items-center gap-2 text-sm" style={{ color: COR_STATUS[peca.status] }}>
         {ROTULO_STATUS[peca.status]}
+        {peca.concluido ? <span className="text-gold">Concluída</span> : null}
+        {peca.notas > 0 ? <span className="num rounded-full bg-magenta/20 px-2 text-magenta">{peca.notas}</span> : null}
       </span>
     </span>
   );

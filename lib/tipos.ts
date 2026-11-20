@@ -31,12 +31,30 @@ export type Peca = {
   cta: string | null;
   pilar: Pilar;
   status: StatusPeca;
+  concluido: boolean;
+  concluido_por: string | null;
+  concluido_em: string | null;
   ordem: number;
   slug: string;
   criado_por: string | null;
   atualizado_por: string | null;
   criado_em: string;
   atualizado_em: string;
+};
+
+export type PecaLista = Peca & {
+  midiaFinal: Midia | null;
+  notas: number;
+};
+
+export type ResumoPeca = {
+  id: string;
+  data: string;
+  tipo: TipoPeca;
+  status: StatusPeca;
+  concluido: boolean;
+  concluido_por: string | null;
+  titulo: string;
 };
 
 export type Midia = {

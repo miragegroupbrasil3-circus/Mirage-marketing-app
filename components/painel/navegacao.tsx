@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LayoutGroup, motion } from "framer-motion";
 import { cx } from "@/lib/cx";
 
 const ITENS = [
-  { href: "/hoje", nome: "Hoje" },
+  { href: "/calendario", nome: "Calendário" },
   { href: "/grade", nome: "Grade" },
   { href: "/pracas", nome: "Praças" },
+  { href: "/metricas", nome: "Métricas" },
   { href: "/equipe", nome: "Equipe" },
 ];
 
@@ -32,33 +34,41 @@ export function Navegacao({ variante, pendentes }: { variante: "topo" | "base"; 
 
   return (
     <nav aria-label="Seções" className={variante === "topo" ? "hidden md:block" : "md:hidden"}>
-      <ul className={variante === "topo" ? "flex items-center gap-6" : "flex items-stretch justify-around"}>
-        {ITENS.map((item) => {
-          const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
-          const espera = item.href === "/equipe" && contagem > 0;
-          return (
-            <li key={item.href} className={variante === "base" ? "flex-1" : undefined}>
-              <Link
-                href={item.href}
-                aria-current={ativo ? "page" : undefined}
-                aria-label={espera ? `Equipe, ${contagem} aguardando` : undefined}
-                className={cx(
-                  "flex min-h-11 items-center justify-center gap-1 whitespace-nowrap px-1",
-                  ativo ? "text-gold" : "text-paper",
-                  variante === "topo" && ativo && "underline decoration-gold decoration-1 underline-offset-[0.4em]",
-                )}
-              >
-                {item.nome}
-                {espera ? (
-                  <span className="text-gold" aria-hidden="true">
-                    {contagem}
-                  </span>
-                ) : null}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <LayoutGroup id={`nav-${variante}`}>
+        <ul className={variante === "topo" ? "flex items-center gap-2" : "flex items-stretch justify-around"}>
+          {ITENS.map((item) => {
+            const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
+            const espera = item.href === "/equipe" && contagem > 0;
+            return (
+              <li key={item.href} className={variante === "base" ? "relative flex-1" : "relative"}>
+                <Link
+                  href={item.href}
+                  aria-current={ativo ? "page" : undefined}
+                  aria-label={espera ? `Equipe, ${contagem} aguardando` : undefined}
+                  className={cx(
+                    "relative flex min-h-11 items-center justify-center gap-1 px-2 text-center text-[0.7rem] leading-tight sm:text-sm",
+                    ativo ? "text-gold" : "text-paper",
+                  )}
+                >
+                  {ativo ? (
+                    <motion.span
+                      layoutId={`indicador-${variante}`}
+                      className="absolute inset-x-1 -bottom-0.5 h-0.5 rounded-full bg-gradient-to-r from-magenta via-gold to-turquoise"
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    />
+                  ) : null}
+                  {item.nome}
+                  {espera ? (
+                    <span className="text-gold" aria-hidden="true">
+                      {contagem}
+                    </span>
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </LayoutGroup>
     </nav>
   );
 }

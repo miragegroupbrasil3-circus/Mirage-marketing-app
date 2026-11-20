@@ -1,19 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --black: #000000;
-  --gold: #e7c87a;
+  --black: #050308;
+  --gold: #f5b700;
+  --amber: #ff9f1c;
+  --magenta: #ff2d8a;
+  --crimson: #e10600;
+  --turquoise: #00e5d0;
+  --royal: #7b2cff;
   --paper: #f6f3ec;
   --mist: #c8c2b6;
-  --line: rgba(231, 200, 122, 0.34);
+  --line: rgba(245, 183, 0, 0.38);
   --line-soft: rgba(246, 243, 236, 0.16);
   color-scheme: dark;
 }
 
 @theme inline {
   --font-sans: var(--font-outfit), "Avenir Next", "Segoe UI", sans-serif;
-  --font-display: var(--font-cormorant), "Iowan Old Style", Palatino, "Palatino Linotype", serif;
+  --font-display: var(--font-cinzel), "Iowan Old Style", Palatino, "Palatino Linotype", serif;
   --color-gold: var(--gold);
+  --color-amber: var(--amber);
+  --color-magenta: var(--magenta);
+  --color-crimson: var(--crimson);
+  --color-turquoise: var(--turquoise);
+  --color-royal: var(--royal);
   --color-paper: var(--paper);
   --color-mist: var(--mist);
   --color-ink: var(--black);
@@ -49,10 +59,88 @@ body {
 
 .font-display {
   font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   line-height: 1.05;
   text-wrap: balance;
+}
+
+.brilho {
+  background-image: linear-gradient(105deg, #f5b700 0%, #fff1b8 28%, #ff2d8a 52%, #ffe28a 74%, #f5b700 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: varredura-texto 6.5s linear infinite;
+}
+
+.logo-brilho {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+
+.logo-brilho::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 32%, rgba(255, 244, 196, 0.72) 48%, transparent 64%);
+  transform: translateX(-130%);
+  animation: varredura 4.8s ease-in-out infinite;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.holofotes {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 42% 28% at 12% -8%, rgba(245, 183, 0, 0.28), transparent 62%),
+    radial-gradient(ellipse 34% 30% at 96% -6%, rgba(255, 45, 138, 0.2), transparent 64%),
+    radial-gradient(ellipse 28% 24% at 78% 108%, rgba(0, 229, 208, 0.12), transparent 62%),
+    radial-gradient(ellipse 26% 22% at 4% 92%, rgba(123, 44, 255, 0.18), transparent 64%);
+  animation: holofote 18s ease-in-out infinite alternate;
+}
+
+.esqueleto {
+  border-radius: 0.75rem;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0.04) 20%, rgba(245, 183, 0, 0.2) 42%, rgba(255, 45, 138, 0.12) 58%, rgba(255, 255, 255, 0.04) 80%);
+  background-size: 220% 100%;
+  animation: varredura-texto 1.5s ease-in-out infinite;
+}
+
+.cartao-circo {
+  border: 1px solid rgba(245, 183, 0, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
+    rgba(5, 3, 8, 0.82);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
+@keyframes varredura-texto {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+@keyframes varredura {
+  0%, 55% { transform: translateX(-130%); }
+  100% { transform: translateX(130%); }
+}
+
+@keyframes subir {
+  from { translate: 0 14px; }
+  to { translate: 0 0; }
+}
+
+.entrada {
+  animation: subir 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes holofote {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(0, -1.5%, 0) scale(1.05); }
 }
 
 .texto {
@@ -157,5 +245,18 @@ textarea.campo {
 
   .botao:active {
     transform: none;
+  }
+
+  .brilho {
+    animation: none;
+    color: var(--gold);
+    background: none;
+  }
+
+  .logo-brilho::after,
+  .holofotes,
+  .esqueleto,
+  .entrada {
+    animation: none;
   }
 }

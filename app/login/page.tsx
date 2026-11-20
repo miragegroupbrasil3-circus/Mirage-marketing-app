@@ -9,7 +9,7 @@ export default async function PaginaLogin({
   searchParams: Promise<{ next?: string }>;
 }) {
   const query = await searchParams;
-  const next = query.next?.startsWith("/") && !query.next.startsWith("//") ? query.next : "/hoje";
+  const next = query.next?.startsWith("/") && !query.next.startsWith("//") ? query.next : "/calendario";
 
   return (
     <MolduraAcesso animar>

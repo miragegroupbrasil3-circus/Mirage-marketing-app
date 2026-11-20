@@ -28,7 +28,7 @@ export async function proxy(request: NextRequest) {
 
   if (previewAtivo()) {
     if (caminho === "/login" && !request.nextUrl.searchParams.has("ver")) {
-      return NextResponse.redirect(new URL("/hoje", request.url));
+      return NextResponse.redirect(new URL("/calendario", request.url));
     }
     const resposta = NextResponse.next({ request });
     resposta.headers.set("x-mirage-preview", "1");
@@ -85,7 +85,7 @@ export async function proxy(request: NextRequest) {
 
   if (status === "aprovado") {
     if (caminho === "/login" || caminho === "/aguardando" || caminho === "/recusado") {
-      return redirecionar(request, response, "/hoje");
+      return redirecionar(request, response, "/calendario");
     }
     return response;
   }

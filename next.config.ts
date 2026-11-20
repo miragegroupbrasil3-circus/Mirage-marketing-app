@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // O preview e o HMR do dev abrem em 127.0.0.1. Sem isto o Next bloqueia o cliente.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   devIndicators: false,
   images: {
     formats: ["image/avif", "image/webp"],

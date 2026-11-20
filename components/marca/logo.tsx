@@ -34,7 +34,7 @@ export function Logo({ tamanho = "cabecalho", preload = false }: { tamanho?: Tam
   const visual = VISUAL[tamanho];
 
   return (
-    <span className={visual.caixa}>
+    <span className={`logo-brilho ${visual.caixa}`}>
       <Image
         src={SRC}
         alt="Mirage Circus"

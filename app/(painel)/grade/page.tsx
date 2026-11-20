@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Quadro } from "@/components/grade/quadro";
+import { Titulo } from "@/components/motion/titulo";
 import { listarPracas, pecasNoIntervalo, pracaAtiva } from "@/lib/consultas";
 import { diasDaSemana, hojeISO, rotuloSemana, segundaDaSemana, somarDias } from "@/lib/datas";
 import { previewAtivo } from "@/lib/preview";
@@ -33,7 +34,7 @@ export default async function PaginaGrade({
     <div>
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="font-display text-5xl text-gold sm:text-6xl">Grade</h1>
+          <Titulo>Grade</Titulo>
           <p className="mt-3 text-paper">{rotuloSemana(segunda)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">

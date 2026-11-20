@@ -108,3 +108,60 @@ export function quando(iso: string) {
     timeZone: FUSO,
   }).format(data);
 }
+
+export function tempoRelativo(iso: string, agora = new Date()) {
+  const delta = agora.getTime() - new Date(iso).getTime();
+  const minutos = Math.round(delta / 60000);
+  if (!Number.isFinite(minutos)) return quando(iso);
+  if (minutos < 1) return "agora";
+  if (minutos < 60) return minutos === 1 ? "há 1 min" : `há ${minutos} min`;
+  const horas = Math.round(minutos / 60);
+  if (horas < 24) return horas === 1 ? "há 1 h" : `há ${horas} h`;
+  const dias = Math.round(horas / 24);
+  if (dias < 30) return dias === 1 ? "há 1 dia" : `há ${dias} dias`;
+  return quando(iso);
+}
+
+export function mesDe(iso: string) {
+  return iso.slice(0, 7);
+}
+
+export function inicioMes(mes: string) {
+  return `${mes}-01`;
+}
+
+export function fimMes(mes: string) {
+  const [ano, mesNumero] = mes.split("-").map(Number);
+  const ultimo = new Date(Date.UTC(ano, mesNumero, 0)).getUTCDate();
+  return `${mes}-${String(ultimo).padStart(2, "0")}`;
+}
+
+export function somarMeses(mes: string, delta: number) {
+  const [ano, mesNumero] = mes.split("-").map(Number);
+  const data = new Date(Date.UTC(ano, mesNumero - 1 + delta, 1));
+  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function gradeDoMes(mes: string) {
+  const primeira = segundaDaSemana(inicioMes(mes));
+  const ultima = somarDias(segundaDaSemana(fimMes(mes)), 6);
+  const dias: string[] = [];
+  for (let dia = primeira; dia <= ultima; dia = somarDias(dia, 1)) dias.push(dia);
+  return dias;
+}
+
+export function rotuloMes(mes: string) {
+  const texto = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(dataUtc(inicioMes(mes)));
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+export function rotuloDiaMes(iso: string) {
+  const data = dataUtc(iso);
+  const dia = String(data.getUTCDate()).padStart(2, "0");
+  const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
+  return `${dia}/${mes}`;
+}

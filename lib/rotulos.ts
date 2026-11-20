@@ -3,7 +3,7 @@ import type { Pilar, StatusPeca, TipoPeca } from "@/lib/tipos";
 export const ROTULO_TIPO: Record<TipoPeca, string> = {
   reels: "Reels",
   carrossel: "Carrossel",
-  estatico: "Estático",
+  estatico: "Post",
   stories: "Stories",
 };
 
@@ -30,6 +30,9 @@ export const ROTULO_CAMPO: Record<string, string> = {
   tipo: "Formato",
   pilar: "Pilar",
   status: "Estado",
+  concluido: "Conclusão",
+  concluido_por: "Concluída por",
+  concluido_em: "Concluída em",
   ordem: "Ordem",
   slug: "Caminho",
   praca_id: "Praça",
@@ -37,6 +40,12 @@ export const ROTULO_CAMPO: Record<string, string> = {
 
 export function textoHistorico(campo: string, valor: unknown) {
   if (valor == null) return "vazio";
+  if (typeof valor === "boolean" || valor === "true" || valor === "false") {
+    const sim = valor === true || valor === "true";
+    if (campo === "concluido") return sim ? "concluída" : "em aberto";
+    return sim ? "sim" : "não";
+  }
+  if (campo === "concluido_por") return "pessoa da equipe";
   const cru = typeof valor === "string" ? valor : String(valor);
   if (campo === "tipo" && cru in ROTULO_TIPO) return ROTULO_TIPO[cru as TipoPeca];
   if (campo === "pilar" && cru in ROTULO_PILAR) return ROTULO_PILAR[cru as Pilar];

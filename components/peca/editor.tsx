@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { Moldura } from "@/components/marca/moldura";
+import { BotaoConcluir } from "@/components/peca/concluir";
+import { Notas } from "@/components/peca/notas";
 import { caminhoMidia } from "@/lib/caminho";
 import { quando } from "@/lib/datas";
 import { enviarParaStorage, medidasDoArquivo, tokenDeEnvio } from "@/lib/envio";
@@ -20,6 +22,7 @@ export function EditorPeca({
   historico,
   preview,
   pracaSlug,
+  autorNome,
 }: {
   peca: Peca;
   midias: Midia[];
@@ -27,14 +30,15 @@ export function EditorPeca({
   historico: ItemHistorico[];
   preview: boolean;
   pracaSlug: string;
+  autorNome: string;
 }) {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState<{ nome: string; porcentagem: number } | null>(null);
   const [sobre, setSobre] = useState(false);
   const [locais, setLocais] = useState<Midia[]>(midias);
-  const [notas, setNotas] = useState(comentarios);
   const [ajuste, setAjuste] = useState<Partial<Peca>>({});
+  const [trilha, setTrilha] = useState(historico);
   const vista = { ...peca, ...ajuste };
 
   useEffect(() => {
@@ -44,17 +48,38 @@ export function EditorPeca({
       .channel(`peca:${peca.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pecas", filter: `id=eq.${peca.id}` }, () => router.refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "midias", filter: `peca_id=eq.${peca.id}` }, () => router.refresh())
-      .on("postgres_changes", { event: "*", schema: "public", table: "comentarios", filter: `peca_id=eq.${peca.id}` }, () => router.refresh())
       .subscribe();
     return () => {
       void supabase.removeChannel(canal);
     };
   }, [peca.id, preview, router]);
 
-  async function salvar(campo: string, valor: string | null) {
+  async function salvar(campo: string, valor: string | boolean | null) {
     setErro(null);
     if (preview) {
-      setAjuste((atual) => ({ ...atual, [campo]: valor }));
+      setAjuste((atual) => {
+        const proximo = { ...atual, [campo]: valor } as Partial<Peca>;
+        if (campo === "concluido") {
+          const feito = Boolean(valor);
+          proximo.concluido = feito;
+          proximo.concluido_por = feito ? peca.criado_por : null;
+          proximo.concluido_em = feito ? new Date().toISOString() : null;
+        }
+        return proximo;
+      });
+      setTrilha((atual) => [
+        {
+          id: `local-${crypto.randomUUID()}`,
+          peca_id: peca.id,
+          autor_id: null,
+          campo,
+          antes: (peca as unknown as Record<string, unknown>)[campo] ?? null,
+          depois: valor,
+          criado_em: new Date().toISOString(),
+          autor_nome: autorNome,
+        },
+        ...atual,
+      ]);
       return null;
     }
     const supabase = criarClienteNavegador();
@@ -176,44 +201,14 @@ export function EditorPeca({
     else router.refresh();
   }
 
-  async function comentar(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault();
-    const dados = new FormData(evento.currentTarget);
-    const texto = String(dados.get("texto") ?? "").trim();
-    if (!texto) return;
-    if (preview) {
-      setNotas((atual) => [
-        ...atual,
-        {
-          id: `local-${crypto.randomUUID()}`,
-          peca_id: peca.id,
-          autor_id: null,
-          texto,
-          criado_em: new Date().toISOString(),
-          autor_nome: "Prévia",
-        },
-      ]);
-      evento.currentTarget.reset();
-      return;
-    }
-    const supabase = criarClienteNavegador();
-    const { error } = await supabase.from("comentarios").insert({ peca_id: peca.id, texto });
-    if (error) setErro("Não foi possível comentar.");
-    else {
-      evento.currentTarget.reset();
-      router.refresh();
-    }
-  }
-
   const listaMidias = preview ? locais : midias;
-  const listaNotas = preview ? notas : comentarios;
-  const listaHistorico = historico;
+  const listaHistorico = preview ? trilha : historico;
 
   return (
     <article className="mx-auto flex max-w-[40rem] flex-col gap-12">
       <p>
-        <Link href="/grade" className="link">
-          Grade
+        <Link href="/calendario" className="link">
+          Calendário
         </Link>
       </p>
       {erro ? (
@@ -255,7 +250,7 @@ export function EditorPeca({
         />
       </div>
 
-      <CampoTexto rotulo="Legenda" valor={vista.legenda} multilinha onSalvar={(valor) => salvar("legenda", valor)} />
+      <CampoTexto rotulo="Texto / roteiro" valor={vista.legenda} multilinha onSalvar={(valor) => salvar("legenda", valor)} />
       <CampoTexto rotulo="Chamada" valor={vista.cta ?? ""} onSalvar={(valor) => salvar("cta", valor || null)} />
 
       <section>
@@ -325,30 +320,8 @@ export function EditorPeca({
         </ul>
       </section>
 
-      <section>
-        <h2 className="font-display text-3xl text-gold">Comentários</h2>
-        {listaNotas.length === 0 ? <p className="mt-4 text-mist">Nenhum comentário ainda.</p> : null}
-        <ul className="mt-4 flex flex-col gap-5">
-          {listaNotas.map((nota) => (
-            <li key={nota.id}>
-              <p className="texto text-paper">{nota.texto}</p>
-              <p className="mt-1 text-sm text-mist">
-                {nota.autor_nome}{" "}
-                <span className="num">{quando(nota.criado_em)}</span>
-              </p>
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={comentar} className="mt-6 flex flex-col gap-3">
-          <label htmlFor="comentario" className="text-paper">
-            Comentário
-          </label>
-          <textarea id="comentario" name="texto" required maxLength={4000} className="campo" />
-          <button type="submit" className="botao self-start">
-            Comentar
-          </button>
-        </form>
-      </section>
+      <BotaoConcluir concluido={Boolean(vista.concluido)} onMudar={(valor) => salvar("concluido", valor)} />
+      <Notas pecaId={peca.id} iniciais={comentarios} preview={preview} autorNome={autorNome} />
 
       <section>
         <h2 className="font-display text-3xl text-gold">Histórico</h2>
