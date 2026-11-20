@@ -1,4 +1,4 @@
-const CACHE = "mirage-estatico-v2";
+const CACHE = "mirage-estatico-v3";
 const PRECACHE = ["/offline", "/icons/icon-192.png", "/icons/icon-512.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

@@ -2,7 +2,7 @@
   "name": "Mirage Circus",
   "short_name": "Mirage",
   "description": "Grade interna de conteúdo do Mirage Circus.",
-  "start_url": "/hoje",
+  "start_url": "/calendario",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",

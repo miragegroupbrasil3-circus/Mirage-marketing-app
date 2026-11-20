@@ -1,4 +1,4 @@
-import type { Pilar, StatusPeca, TipoPeca } from "@/lib/tipos";
+import type { Pilar, StatusDemanda, StatusPeca, TipoDemanda, TipoPeca } from "@/lib/tipos";
 
 export const ROTULO_TIPO: Record<TipoPeca, string> = {
   reels: "Reels",
@@ -19,6 +19,20 @@ export const ROTULO_STATUS: Record<StatusPeca, string> = {
   em_producao: "Em produção",
   pronto: "Pronto",
   publicado: "Publicado",
+};
+
+export const ROTULO_TIPO_DEMANDA: Record<TipoDemanda, string> = {
+  flyer: "Flyer",
+  story: "Story",
+  arte_feed: "Arte para feed",
+  video: "Vídeo",
+  outro: "Outro",
+};
+
+export const ROTULO_STATUS_DEMANDA: Record<StatusDemanda, string> = {
+  a_fazer: "A fazer",
+  fazendo: "Fazendo",
+  feito: "Feito",
 };
 
 export const ROTULO_CAMPO: Record<string, string> = {

@@ -1,5 +1,5 @@
 import { diasDaSemana, hojeISO, segundaDaSemana, somarDias } from "@/lib/datas";
-import type { Comentario, ItemHistorico, Membro, Midia, Peca, Praca, Sessao } from "@/lib/tipos";
+import type { Comentario, Demanda, ItemHistorico, Membro, Midia, Peca, Praca, Sessao } from "@/lib/tipos";
 
 export const ID_PRACA_EXEMPLO = "11111111-1111-4111-8111-111111111111";
 export const ID_USUARIO_EXEMPLO = "00000000-0000-4000-8000-000000000001";
@@ -45,12 +45,21 @@ export const pracaExemplo: Praca = {
   id: ID_PRACA_EXEMPLO,
   cidade: "Exemplo",
   slug: "exemplo",
-  temporada: null,
+  temporada: "Temporada de exemplo",
   inicio: null,
   fim: null,
   ativa: false,
   e_exemplo: true,
 };
+
+export function pracaPrevia(ajuste?: { inicio: string | null; fim: string | null }): Praca {
+  const hoje = hojeISO();
+  return {
+    ...pracaExemplo,
+    inicio: ajuste ? ajuste.inicio : segundaDaSemana(hoje),
+    fim: ajuste ? ajuste.fim : hoje,
+  };
+}
 
 function peca(
   parcial: Omit<
@@ -195,6 +204,74 @@ export function comentariosExemplo(pecaId: string): Comentario[] {
       texto: "Conferir se a captação mostra a escala, sem inventar altura.",
       criado_em: "2026-11-18T15:00:00.000Z",
       autor_nome: "Prévia",
+    },
+  ];
+}
+
+export function demandasExemplo(): Demanda[] {
+  const hoje = hojeISO();
+  const segunda = segundaDaSemana(hoje);
+  const base = {
+    praca_id: ID_PRACA_EXEMPLO,
+    criado_por: ID_USUARIO_EXEMPLO,
+    criado_em: "2026-11-18T12:00:00.000Z",
+    atualizado_em: "2026-11-18T12:00:00.000Z",
+  };
+  return [
+    {
+      ...base,
+      id: "66666666-6666-4666-8666-666666666661",
+      tipo: "flyer",
+      titulo: "Flyer da estreia",
+      descricao: "Horário, endereço e o nome do espetáculo. Sem depoimento inventado.",
+      prazo: hoje,
+      responsavel_id: ID_USUARIO_EXEMPLO,
+      status: "fazendo",
+      concluido_em: null,
+    },
+    {
+      ...base,
+      id: "66666666-6666-4666-8666-666666666662",
+      tipo: "story",
+      titulo: "Story da fila",
+      descricao: "Um quadro da entrada, se a foto for real.",
+      prazo: somarDias(hoje, 2),
+      responsavel_id: "00000000-0000-4000-8000-000000000002",
+      status: "a_fazer",
+      concluido_em: null,
+    },
+    {
+      ...base,
+      id: "66666666-6666-4666-8666-666666666663",
+      tipo: "arte_feed",
+      titulo: "Arte de feed da semana",
+      descricao: null,
+      prazo: segunda,
+      responsavel_id: ID_USUARIO_EXEMPLO,
+      status: "feito",
+      concluido_em: "2026-11-18T18:00:00.000Z",
+    },
+    {
+      ...base,
+      id: "66666666-6666-4666-8666-666666666664",
+      tipo: "video",
+      titulo: "Vídeo curto do picadeiro",
+      descricao: "Abre no trajeto da moto e fecha no picadeiro.",
+      prazo: null,
+      responsavel_id: null,
+      status: "a_fazer",
+      concluido_em: null,
+    },
+    {
+      ...base,
+      id: "66666666-6666-4666-8666-666666666665",
+      tipo: "outro",
+      titulo: "Cartaz da porta",
+      descricao: "O mesmo horário do flyer, no tamanho da porta.",
+      prazo: somarDias(segunda, -2),
+      responsavel_id: null,
+      status: "a_fazer",
+      concluido_em: null,
     },
   ];
 }

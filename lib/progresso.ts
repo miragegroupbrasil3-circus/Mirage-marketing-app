@@ -11,6 +11,14 @@ export function noIntervalo<T extends { data: string }>(pecas: T[], inicio: stri
   return pecas.filter((peca) => peca.data >= inicio && peca.data <= fim);
 }
 
+export function noPeriodo<T extends { data: string }>(itens: T[], inicio: string | null, fim: string | null) {
+  return itens.filter((item) => {
+    if (inicio && item.data < inicio) return false;
+    if (fim && item.data > fim) return false;
+    return true;
+  });
+}
+
 export function contagem(pecas: { concluido: boolean }[]) {
   return {
     total: pecas.length,

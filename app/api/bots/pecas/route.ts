@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { slugPeca } from "@/lib/caminho";
+import { mensagemTituloPeca } from "@/lib/peca-campos";
 import { criarClienteServico } from "@/lib/supabase/admin";
 import { PILARES, STATUS_PECA, TIPOS_PECA } from "@/lib/tipos";
 
@@ -89,6 +90,11 @@ export async function POST(request: Request) {
   if (!STATUS_PECA.includes(status as (typeof STATUS_PECA)[number])) {
     return NextResponse.json({ erro: "Estado desconhecido." }, { status: 400 });
   }
+  const titulo = typeof corpo.titulo === "string" ? corpo.titulo : "";
+  const erroTitulo = mensagemTituloPeca(titulo);
+  if (erroTitulo) {
+    return NextResponse.json({ erro: erroTitulo }, { status: 400 });
+  }
 
   const { data: criada, error } = await admin
     .from("pecas")
@@ -97,7 +103,7 @@ export async function POST(request: Request) {
       data: corpo.data,
       horario: corpo.horario || null,
       tipo,
-      titulo: corpo.titulo ?? "",
+      titulo: titulo.trim(),
       legenda: corpo.legenda ?? "",
       cta: corpo.cta || null,
       pilar,

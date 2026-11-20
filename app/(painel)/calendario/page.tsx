@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PainelCalendario } from "@/components/calendario/painel";
+import { SecaoDemandas } from "@/components/calendario/demandas";
 import { Titulo } from "@/components/motion/titulo";
-import { listarMembros, listarResumo, obterSessao, pecasNoIntervalo, pracaAtiva, listarPracas } from "@/lib/consultas";
+import { listarDemandas, listarMembros, listarResumo, obterSessao, pecasNoIntervalo, pracaAtiva, listarPracas } from "@/lib/consultas";
 import { gradeDoMes, hojeISO, mesDe } from "@/lib/datas";
 import { previewAtivo } from "@/lib/preview";
 
@@ -37,26 +38,39 @@ export default async function PaginaCalendario({
     );
   }
 
-  const [pecas, resumo, membros, sessao] = await Promise.all([
+  const [pecas, resumo, membros, sessao, demandas] = await Promise.all([
     pecasNoIntervalo(praca.id, grade[0], grade[grade.length - 1], true),
     listarResumo(praca.id),
     listarMembros(),
     obterSessao(),
+    listarDemandas(praca.id),
   ]);
+  const equipe = membros.filter((membro) => membro.status === "aprovado").map((membro) => ({ id: membro.id, nome: membro.nome }));
 
   return (
-    <PainelCalendario
-      mes={mes}
-      diaInicial={dia}
-      pecas={pecas}
-      resumo={resumo}
-      hoje={hoje}
-      pracaId={praca.id}
-      preview={previewAtivo()}
-      autorNome={sessao?.nome ?? "Equipe"}
-      autorId={sessao?.id ?? ""}
-      membros={membros.map((membro) => ({ id: membro.id, nome: membro.nome }))}
-      cidade={praca.cidade}
-    />
+    <div>
+      <PainelCalendario
+        mes={mes}
+        diaInicial={dia}
+        pecas={pecas}
+        resumo={resumo}
+        hoje={hoje}
+        pracaId={praca.id}
+        preview={previewAtivo()}
+        autorNome={sessao?.nome ?? "Equipe"}
+        autorId={sessao?.id ?? ""}
+        membros={equipe}
+        cidade={praca.cidade}
+        inicio={praca.inicio}
+        fim={praca.fim}
+      />
+      <SecaoDemandas
+        iniciais={demandas}
+        pracaId={praca.id}
+        preview={previewAtivo()}
+        autorId={sessao?.id ?? ""}
+        membros={equipe}
+      />
+    </div>
   );
 }

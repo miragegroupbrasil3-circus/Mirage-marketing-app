@@ -1,4 +1,4 @@
-import type { StatusPeca, TipoPeca } from "@/lib/tipos";
+import type { StatusDemanda, StatusPeca, TipoDemanda, TipoPeca } from "@/lib/tipos";
 
 export const COR_TIPO: Record<TipoPeca, string> = {
   reels: "#FF2D8A",
@@ -19,4 +19,18 @@ export const SIGLA_TIPO: Record<TipoPeca, string> = {
   stories: "S",
   carrossel: "C",
   estatico: "P",
+};
+
+export const COR_DEMANDA: Record<TipoDemanda, string> = {
+  flyer: "#F5B700",
+  story: "#00E5D0",
+  arte_feed: "#FF2D8A",
+  video: "#7B2CFF",
+  outro: "#C8C2B6",
+};
+
+export const COR_STATUS_DEMANDA: Record<StatusDemanda, string> = {
+  a_fazer: "#C8C2B6",
+  fazendo: "#FF9F1C",
+  feito: "#00E5D0",
 };
