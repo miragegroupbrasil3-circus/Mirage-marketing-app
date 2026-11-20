@@ -253,6 +253,7 @@ function QuadroVivo({
         </p>
       ) : null}
       <DndContext
+        id="grade"
         sensors={sensores}
         collisionDetection={closestCorners}
         onDragStart={(evento: DragStartEvent) => setAtivoId(String(evento.active.id))}

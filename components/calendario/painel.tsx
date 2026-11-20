@@ -353,7 +353,7 @@ export function PainelCalendario({
         </p>
       ) : null}
 
-      <DndContext sensors={sensores} collisionDetection={closestCenter} onDragStart={(evento) => setArrastando(String(evento.active.id))} onDragEnd={aoSoltar} onDragCancel={() => setArrastando(null)}>
+      <DndContext id="calendario" sensors={sensores} collisionDetection={closestCenter} onDragStart={(evento) => setArrastando(String(evento.active.id))} onDragEnd={aoSoltar} onDragCancel={() => setArrastando(null)}>
         <div className="mt-4 grid grid-cols-7 gap-1 md:gap-2">
           {SEMANA.map((nome) => (
             <div key={nome} className="pb-1 text-center text-[0.7rem] uppercase tracking-wide text-mist">
