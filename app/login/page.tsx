@@ -13,7 +13,7 @@ export default async function PaginaLogin({
 
   return (
     <MolduraAcesso animar>
-      <p className="texto text-center text-paper">A grade de quem publica o circo.</p>
+      <p className="texto text-center text-paper">O maior circo da América Latina</p>
       <FormularioLogin next={next} />
     </MolduraAcesso>
   );

@@ -79,7 +79,7 @@ Não use `UPDATE` para mudar `status`. O gatilho recusa. O caminho é a página 
 
 ## Logo
 
-A marca oficial é `public/brand/logo-mirage.png` (fundo preto, sem transparência). `components/marca/logo.tsx` mostra esse arquivo com `next/image`, em WebP ou AVIF, no tamanho da tela.
+A marca oficial é `public/brand/logo-mirage.png` (893×321, fundo transparente, feita a partir da arte de fundo preto: o preto vira transparência e a área dos olhos fica sólida). Fica melhor sobre fundo escuro; sobre fundo claro os cílios externos ficam claros e aparece uma leve sombra em volta dos olhos. `components/marca/logo.tsx` mostra esse arquivo com `next/image`, em WebP ou AVIF, no tamanho da tela.
 
 Os ícones do PWA estão em `public/icons/icon-192.png`, `public/icons/icon-512.png` e `public/apple-touch-icon.png`. O manifesto usa `purpose: any`.
 
