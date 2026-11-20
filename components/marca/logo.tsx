@@ -1,8 +1,8 @@
 import Image from "next/image";
 
 const SRC = "/brand/logo-mirage.png";
-const LARGURA = 1328;
-const ALTURA = 508;
+const LARGURA = 893;
+const ALTURA = 321;
 
 type Tamanho = "cabecalho" | "acesso" | "repouso";
 
@@ -11,10 +11,10 @@ const VISUAL: Record<
   { caixa: string; imagem: string; style: { width: string; height: string }; sizes: string }
 > = {
   cabecalho: {
-    caixa: "block h-9 w-[94px] shrink-0 md:h-11 md:w-[115px]",
+    caixa: "block h-9 w-[100px] shrink-0 md:h-11 md:w-[122px]",
     imagem: "block h-full w-full bg-transparent object-contain",
     style: { width: "100%", height: "100%" },
-    sizes: "(max-width: 768px) 94px, 115px",
+    sizes: "(max-width: 768px) 100px, 122px",
   },
   acesso: {
     caixa: "block w-full",

@@ -89,6 +89,9 @@ body {
   animation: varredura 4.8s ease-in-out infinite;
   mix-blend-mode: screen;
   pointer-events: none;
+  /* A logo agora é transparente: o brilho só passa por cima do desenho, não do fundo. */
+  -webkit-mask: url("/brand/logo-mirage.png") center / contain no-repeat;
+  mask: url("/brand/logo-mirage.png") center / contain no-repeat;
 }
 
 .holofotes {
