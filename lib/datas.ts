@@ -27,6 +27,11 @@ export function somarDias(iso: string, dias: number) {
   return formatarISO(data);
 }
 
+export function diasInclusivos(inicio: string, fim: string) {
+  const ms = dataUtc(fim).getTime() - dataUtc(inicio).getTime();
+  return Math.round(ms / 86400000) + 1;
+}
+
 export function segundaDaSemana(iso: string) {
   const data = dataUtc(iso);
   const dia = data.getUTCDay() || 7;

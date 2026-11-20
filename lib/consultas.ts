@@ -4,17 +4,28 @@ import { criarCliente } from "@/lib/supabase/server";
 import { previewAtivo } from "@/lib/preview";
 import {
   comentariosExemplo,
+  demandasExemplo,
   historicoExemplo,
   ID_PRACA_EXEMPLO,
   membrosExemplo,
   midiasExemplo,
   pecasExemplo,
-  pracaExemplo,
+  pracaPrevia,
   sessaoExemplo,
 } from "@/lib/exemplo";
-import { normalizarStatus, type Comentario, type ItemHistorico, type Membro, type Midia, type Peca, type PecaLista, type Praca, type ResumoPeca, type Sessao } from "@/lib/tipos";
+import { COOKIE_TEMPORADA_PREVIA } from "@/lib/temporada";
+import { normalizarStatus, type Comentario, type Demanda, type ItemHistorico, type MarcoConteudo, type Membro, type Midia, type Peca, type PecaLista, type Praca, type ResumoPeca, type Sessao } from "@/lib/tipos";
 
 export const COOKIE_PRACA = "mirage-praca";
+
+function temporadaPrevia(valor: string | undefined) {
+  if (!valor || !valor.includes("|")) return undefined;
+  const [inicio, fim] = valor.split("|");
+  const data = (texto: string) => (/^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto : null);
+  if (inicio !== "-" && !data(inicio)) return undefined;
+  if (fim !== "-" && !data(fim)) return undefined;
+  return { inicio: data(inicio), fim: data(fim) };
+}
 
 async function assinar(caminhos: string[]) {
   const unicos = [...new Set(caminhos.filter(Boolean))];
@@ -117,7 +128,10 @@ export const contarPendentes = cache(async (): Promise<number> => {
 });
 
 export const listarPracas = cache(async (): Promise<Praca[]> => {
-  if (previewAtivo()) return [pracaExemplo];
+  if (previewAtivo()) {
+    const store = await cookies();
+    return [pracaPrevia(temporadaPrevia(store.get(COOKIE_TEMPORADA_PREVIA)?.value))];
+  }
   const supabase = await criarCliente();
   const { data, error } = await supabase.from("pracas").select("*").order("cidade");
   if (error) throw new Error(error.message);
@@ -289,6 +303,88 @@ export async function listarHistorico(pecaId: string): Promise<ItemHistorico[]> 
       autor_nome: nome || "Equipe",
     };
   });
+}
+
+function mapearDemanda(linha: Record<string, unknown>): Demanda {
+  const tipo = linha.tipo;
+  const status = linha.status;
+  return {
+    id: String(linha.id),
+    praca_id: String(linha.praca_id),
+    tipo: tipo === "flyer" || tipo === "story" || tipo === "arte_feed" || tipo === "video" || tipo === "outro" ? tipo : "outro",
+    titulo: String(linha.titulo ?? ""),
+    descricao: linha.descricao == null || linha.descricao === "" ? null : String(linha.descricao),
+    prazo: linha.prazo == null ? null : String(linha.prazo),
+    responsavel_id: linha.responsavel_id == null ? null : String(linha.responsavel_id),
+    status: status === "a_fazer" || status === "fazendo" || status === "feito" ? status : "a_fazer",
+    criado_por: linha.criado_por == null ? null : String(linha.criado_por),
+    criado_em: String(linha.criado_em),
+    atualizado_em: String(linha.atualizado_em),
+    concluido_em: linha.concluido_em == null ? null : String(linha.concluido_em),
+  };
+}
+
+export async function listarDemandas(pracaId: string): Promise<Demanda[]> {
+  if (previewAtivo()) return demandasExemplo().filter((demanda) => demanda.praca_id === pracaId);
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("demandas")
+    .select("*")
+    .eq("praca_id", pracaId)
+    .order("criado_em", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Record<string, unknown>[]).map(mapearDemanda);
+}
+
+export async function listarMarcos(): Promise<Record<string, { pecas: MarcoConteudo[]; demandas: MarcoConteudo[] }>> {
+  const grupos: Record<string, { pecas: MarcoConteudo[]; demandas: MarcoConteudo[] }> = {};
+  const garantir = (pracaId: string) => {
+    grupos[pracaId] ??= { pecas: [], demandas: [] };
+    return grupos[pracaId];
+  };
+
+  if (previewAtivo()) {
+    for (const peca of pecasExemplo()) {
+      garantir(peca.praca_id).pecas.push({ id: peca.id, praca_id: peca.praca_id, titulo: peca.titulo, data: peca.data });
+    }
+    for (const demanda of demandasExemplo()) {
+      if (!demanda.prazo) continue;
+      garantir(demanda.praca_id).demandas.push({
+        id: demanda.id,
+        praca_id: demanda.praca_id,
+        titulo: demanda.titulo,
+        data: demanda.prazo,
+      });
+    }
+    return grupos;
+  }
+
+  const supabase = await criarCliente();
+  const [pecas, demandas] = await Promise.all([
+    supabase.from("pecas").select("id, praca_id, titulo, data"),
+    supabase.from("demandas").select("id, praca_id, titulo, prazo").not("prazo", "is", null),
+  ]);
+  if (pecas.error) throw new Error(pecas.error.message);
+  if (demandas.error) throw new Error(demandas.error.message);
+  for (const linha of (pecas.data ?? []) as Record<string, unknown>[]) {
+    const pracaId = String(linha.praca_id);
+    garantir(pracaId).pecas.push({
+      id: String(linha.id),
+      praca_id: pracaId,
+      titulo: String(linha.titulo ?? ""),
+      data: String(linha.data),
+    });
+  }
+  for (const linha of (demandas.data ?? []) as Record<string, unknown>[]) {
+    const pracaId = String(linha.praca_id);
+    garantir(pracaId).demandas.push({
+      id: String(linha.id),
+      praca_id: pracaId,
+      titulo: String(linha.titulo ?? ""),
+      data: String(linha.prazo),
+    });
+  }
+  return grupos;
 }
 
 export { ID_PRACA_EXEMPLO };

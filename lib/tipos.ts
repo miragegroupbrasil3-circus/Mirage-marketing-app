@@ -2,11 +2,15 @@ export const TIPOS_PECA = ["reels", "carrossel", "estatico", "stories"] as const
 export const PILARES = ["espetaculo", "estrutura", "vida_no_circo", "publico"] as const;
 export const STATUS_PECA = ["ideia", "em_producao", "pronto", "publicado"] as const;
 export const TIPOS_MIDIA = ["imagem", "video"] as const;
+export const TIPOS_DEMANDA = ["flyer", "story", "arte_feed", "video", "outro"] as const;
+export const STATUS_DEMANDA = ["a_fazer", "fazendo", "feito"] as const;
 
 export type TipoPeca = (typeof TIPOS_PECA)[number];
 export type Pilar = (typeof PILARES)[number];
 export type StatusPeca = (typeof STATUS_PECA)[number];
 export type TipoMidia = (typeof TIPOS_MIDIA)[number];
+export type TipoDemanda = (typeof TIPOS_DEMANDA)[number];
+export type StatusDemanda = (typeof STATUS_DEMANDA)[number];
 
 export type Praca = {
   id: string;
@@ -97,6 +101,28 @@ export type ItemHistorico = {
 export const STATUS_PERFIL = ["pendente", "aprovado", "recusado"] as const;
 
 export type StatusPerfil = (typeof STATUS_PERFIL)[number];
+
+export type Demanda = {
+  id: string;
+  praca_id: string;
+  tipo: TipoDemanda;
+  titulo: string;
+  descricao: string | null;
+  prazo: string | null;
+  responsavel_id: string | null;
+  status: StatusDemanda;
+  criado_por: string | null;
+  criado_em: string;
+  atualizado_em: string;
+  concluido_em: string | null;
+};
+
+export type MarcoConteudo = {
+  id: string;
+  praca_id: string;
+  titulo: string;
+  data: string;
+};
 
 export type Membro = {
   id: string;

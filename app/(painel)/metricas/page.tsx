@@ -5,9 +5,10 @@ import { Titulo } from "@/components/motion/titulo";
 import { AnelProgresso } from "@/components/progresso/anel";
 import { FaixaProgresso } from "@/components/progresso/faixa";
 import { listarMembros, listarPracas, listarResumo, pracaAtiva } from "@/lib/consultas";
-import { diasDaSemana, fimMes, hojeISO, inicioMes, mesDe, segundaDaSemana } from "@/lib/datas";
+import { OuvirPraca } from "@/components/painel/ouvir-praca";
+import { diasDaSemana, diasInclusivos, fimMes, hojeISO, inicioMes, mesDe, rotuloDiaMes, segundaDaSemana } from "@/lib/datas";
 import { previewAtivo } from "@/lib/preview";
-import { contagem, noIntervalo, porFormato, porPessoa, porSemana, porStatus, sequenciaDias } from "@/lib/progresso";
+import { contagem, noIntervalo, noPeriodo, porFormato, porPessoa, porSemana, porStatus, sequenciaDias } from "@/lib/progresso";
 import { Contador } from "@/components/motion/contador";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function PaginaMetricas() {
   const semana = diasDaSemana(segundaDaSemana(hoje));
   const daSemana = contagem(noIntervalo(resumo, semana[0], semana[6]));
   const doMes = contagem(noIntervalo(resumo, inicioMes(mesDe(hoje)), fimMes(mesDe(hoje))));
-  const daPraca = contagem(resumo);
+  const daPraca = contagem(noPeriodo(resumo, praca.inicio, praca.fim));
   const sequencia = sequenciaDias(resumo, hoje);
   const pessoas = porPessoa(resumo, nomes);
 
@@ -51,6 +52,13 @@ export default async function PaginaMetricas() {
         Progresso da equipe em {praca.cidade}, contado nas peças gravadas. Nada aqui é estimativa.
       </p>
       {preview ? <p className="mt-2 text-sm text-gold">Prévia: estes números saem das peças de exemplo.</p> : null}
+      {praca.inicio && praca.fim && praca.fim >= praca.inicio ? (
+        <p className="mt-2 text-sm text-mist">
+          Nesta praça, a temporada vai de {rotuloDiaMes(praca.inicio)} a {rotuloDiaMes(praca.fim)} ({diasInclusivos(praca.inicio, praca.fim)}{" "}
+          {diasInclusivos(praca.inicio, praca.fim) === 1 ? "dia" : "dias"}). O progresso conta só as peças desse período.
+        </p>
+      ) : null}
+      <OuvirPraca pracaId={praca.id} preview={preview} />
 
       <div className="mt-8 grid gap-4 lg:grid-cols-[auto_1fr_16rem]">
         <Inclinavel className="cartao-circo rounded-3xl p-4">

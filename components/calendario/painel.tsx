@@ -15,6 +15,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { FolhaDia } from "@/components/calendario/folha";
+import { AvisoDesfazer } from "@/components/ui/confirmar";
 import { Contador } from "@/components/motion/contador";
 import { Inclinavel } from "@/components/motion/inclinavel";
 import { Titulo } from "@/components/motion/titulo";
@@ -28,20 +29,31 @@ import {
   mesDe,
   gradeDoMes,
   inicioMes,
+  diasInclusivos,
   rotuloDiaCurto,
   rotuloDiaMes,
   rotuloMes,
   rotuloNumero,
   segundaDaSemana,
+  somarDias,
   somarMeses,
 } from "@/lib/datas";
-import { contagem, fraseHorizonte, horizonteDe, lacunas, noIntervalo, porPessoa, sequenciaDias } from "@/lib/progresso";
+import { excluirPecaNoBanco } from "@/lib/excluir-peca";
+import { payloadPeca, validarCamposPeca, type CamposPeca } from "@/lib/peca-campos";
+import { contagem, fraseHorizonte, horizonteDe, lacunas, noIntervalo, noPeriodo, porPessoa, sequenciaDias } from "@/lib/progresso";
 import { ROTULO_TIPO } from "@/lib/rotulos";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { cx } from "@/lib/cx";
 import { TIPOS_PECA, type PecaLista, type ResumoPeca, type TipoPeca } from "@/lib/tipos";
 
 const SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+type PendenciaExclusao = {
+  peca: PecaLista;
+  resumo: ResumoPeca;
+  timer: number;
+  soltar: () => void;
+};
 
 export function PainelCalendario({
   mes,
@@ -55,6 +67,8 @@ export function PainelCalendario({
   autorId,
   membros,
   cidade,
+  inicio,
+  fim,
 }: {
   mes: string;
   diaInicial: string | null;
@@ -67,6 +81,8 @@ export function PainelCalendario({
   autorId: string;
   membros: { id: string; nome: string }[];
   cidade: string;
+  inicio: string | null;
+  fim: string | null;
 }) {
   const router = useRouter();
   const assinaturaPecas = pecas.map((peca) => `${peca.id}:${peca.data}:${peca.titulo}:${peca.status}:${peca.tipo}:${peca.horario}:${peca.legenda}:${peca.concluido}:${peca.notas}`).join("|");
@@ -82,14 +98,17 @@ export function PainelCalendario({
   const [arrastando, setArrastando] = useState<string | null>(null);
   const silencio = useRef(0);
   const ponteiro = useRef<number | null>(null);
+  const pendentes = useRef<Map<string, PendenciaExclusao>>(new Map());
+  const [ocultas, setOcultas] = useState<string[]>([]);
+  const [desfazer, setDesfazer] = useState<{ id: string; titulo: string } | null>(null);
 
   if (assinaturaPecas !== vistaPecas) {
     setVistaPecas(assinaturaPecas);
-    setPecasLocais(pecas);
+    setPecasLocais(pecas.filter((peca) => !ocultas.includes(peca.id)));
   }
   if (assinaturaResumo !== vistaResumo) {
     setVistaResumo(assinaturaResumo);
-    setResumoLocal(resumo);
+    setResumoLocal(resumo.filter((peca) => !ocultas.includes(peca.id)));
   }
   if (diaInicial !== vistaDia) {
     setVistaDia(diaInicial);
@@ -100,12 +119,12 @@ export function PainelCalendario({
   const grade = useMemo(() => gradeDoMes(mes), [mes]);
   const horizonte = horizonteDe(resumoLocal);
   const primeiraData = resumoLocal.reduce<string | null>((min, peca) => (min == null || peca.data < min ? peca.data : min), null);
-  const vazios = useMemo(() => new Set(lacunas(resumoLocal, hoje, horizonte)), [resumoLocal, hoje, horizonte]);
+  const vazios = useMemo(() => new Set(lacunasDaTemporada(resumoLocal, hoje, inicio, fim)), [resumoLocal, hoje, inicio, fim]);
   const nomes = useMemo(() => new Map(membros.map((membro) => [membro.id, membro.nome])), [membros]);
   const semanaHoje = diasDaSemana(segundaDaSemana(hoje));
   const semanaRing = contagem(noIntervalo(resumoLocal, semanaHoje[0], semanaHoje[6]));
   const mesConta = contagem(noIntervalo(resumoLocal, inicioMes(mes), fimMes(mes)));
-  const pracaConta = contagem(resumoLocal);
+  const pracaConta = contagem(noPeriodo(resumoLocal, inicio, fim));
   const pessoas = porPessoa(resumoLocal, nomes);
   const sequencia = sequenciaDias(resumoLocal, hoje);
   const foco = diaAberto && grade.includes(diaAberto) ? diaAberto : grade.includes(hoje) ? hoje : (grade.find((dia) => dia.startsWith(mes)) ?? grade[0]);
@@ -123,11 +142,26 @@ export function PainelCalendario({
       .on("postgres_changes", { event: "*", schema: "public", table: "comentarios" }, () => {
         if (silencio.current === 0) router.refresh();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "pracas", filter: `id=eq.${pracaId}` }, () => {
+        router.refresh();
+      })
       .subscribe();
     return () => {
       void supabase.removeChannel(canal);
     };
   }, [pracaId, preview, router]);
+
+  useEffect(() => {
+    const mapa = pendentes.current;
+    return () => {
+      for (const [id, item] of mapa) {
+        window.clearTimeout(item.timer);
+        item.soltar();
+        if (!preview && !id.startsWith("local-")) void excluirPecaNoBanco(id);
+      }
+      mapa.clear();
+    };
+  }, [preview]);
 
   function silenciar() {
     silencio.current += 1;
@@ -182,27 +216,49 @@ export function PainelCalendario({
     return null;
   }
 
-  async function criar(data: string) {
-    if (!pracaId) return;
+  function aplicarPayload(id: string, payload: ReturnType<typeof payloadPeca>) {
+    setPecasLocais((atual) => atual.map((peca) => (peca.id === id ? { ...peca, ...payload } : peca)));
+    setResumoLocal((atual) =>
+      atual.map((peca) =>
+        peca.id === id ? { ...peca, data: payload.data, tipo: payload.tipo, status: payload.status, titulo: payload.titulo } : peca,
+      ),
+    );
+  }
+
+  async function guardar(id: string, campos: CamposPeca) {
+    const falha = validarCamposPeca(campos);
+    if (falha) return falha;
+    const payload = payloadPeca(campos);
     setErro(null);
+    aplicarPayload(id, payload);
+    if (preview || id.startsWith("local-")) return null;
+    silenciar();
+    const supabase = criarClienteNavegador();
+    const { error } = await supabase.from("pecas").update(payload).eq("id", id);
+    if (error) {
+      router.refresh();
+      return "Não foi possível guardar.";
+    }
+    return null;
+  }
+
+  async function criar(campos: CamposPeca) {
+    const falha = validarCamposPeca(campos);
+    if (falha) return falha;
+    if (!pracaId) return "Escolha uma praça.";
+    setErro(null);
+    const payload = payloadPeca(campos);
     const agora = new Date().toISOString();
     const temporaria: PecaLista = {
       id: `local-${crypto.randomUUID()}`,
       praca_id: pracaId,
       semana_id: null,
-      data,
-      horario: null,
-      tipo: "reels",
-      titulo: "Nova peça",
-      legenda: "",
-      cta: null,
-      pilar: "espetaculo",
-      status: "ideia",
+      ...payload,
       concluido: false,
       concluido_por: null,
       concluido_em: null,
-      ordem: pecasLocais.filter((peca) => peca.data === data).length,
-      slug: slugPeca("reels"),
+      ordem: pecasLocais.filter((peca) => peca.data === payload.data).length,
+      slug: slugPeca(payload.tipo),
       criado_por: autorId || null,
       atualizado_por: autorId || null,
       criado_em: agora,
@@ -211,23 +267,15 @@ export function PainelCalendario({
       notas: 0,
     };
     setPecasLocais((atual) => [...atual, temporaria]);
-    setResumoLocal((atual) => [
-      ...atual,
-      { id: temporaria.id, data, tipo: "reels", status: "ideia", concluido: false, concluido_por: null, titulo: "Nova peça" },
-    ]);
-    if (preview) return;
+    setResumoLocal((atual) => [...atual, resumoDe(temporaria)]);
+    if (preview) return null;
     silenciar();
     const supabase = criarClienteNavegador();
     const { data: criada, error } = await supabase
       .from("pecas")
       .insert({
         praca_id: pracaId,
-        data,
-        tipo: "reels",
-        titulo: "Nova peça",
-        legenda: "",
-        pilar: "espetaculo",
-        status: "ideia",
+        ...payload,
         ordem: temporaria.ordem,
         slug: temporaria.slug,
       })
@@ -236,11 +284,72 @@ export function PainelCalendario({
     if (error || !criada) {
       setPecasLocais((atual) => atual.filter((peca) => peca.id !== temporaria.id));
       setResumoLocal((atual) => atual.filter((peca) => peca.id !== temporaria.id));
-      setErro("Não foi possível criar a peça.");
-      return;
+      return "Não foi possível criar a peça.";
     }
     setPecasLocais((atual) => atual.map((peca) => (peca.id === temporaria.id ? { ...peca, id: criada.id } : peca)));
     setResumoLocal((atual) => atual.map((peca) => (peca.id === temporaria.id ? { ...peca, id: criada.id } : peca)));
+    return null;
+  }
+
+  function agendarExclusao(id: string) {
+    const peca = pecasLocais.find((item) => item.id === id);
+    if (!peca || pendentes.current.has(id)) return;
+    const resumoItem = resumoLocal.find((item) => item.id === id) ?? resumoDe(peca);
+    setPecasLocais((atual) => atual.filter((item) => item.id !== id));
+    setResumoLocal((atual) => atual.filter((item) => item.id !== id));
+    setOcultas((atual) => (atual.includes(id) ? atual : [...atual, id]));
+    setAnuncio(`${peca.titulo || "Peça"} saiu do calendário.`);
+    const soltar = segurar();
+    const timer = window.setTimeout(() => {
+      void efetivarExclusao(id);
+    }, 5000);
+    pendentes.current.set(id, { peca, resumo: resumoItem, timer, soltar });
+    setDesfazer({ id, titulo: peca.titulo || "Peça" });
+  }
+
+  function desfazerExclusao() {
+    if (!desfazer) return;
+    const item = pendentes.current.get(desfazer.id);
+    if (!item) return;
+    window.clearTimeout(item.timer);
+    item.soltar();
+    pendentes.current.delete(desfazer.id);
+    setOcultas((atual) => atual.filter((itemId) => itemId !== desfazer.id));
+    setPecasLocais((atual) => (atual.some((peca) => peca.id === item.peca.id) ? atual : [...atual, item.peca]));
+    setResumoLocal((atual) => (atual.some((peca) => peca.id === item.resumo.id) ? atual : [...atual, item.resumo]));
+    setDesfazer(null);
+    setAnuncio(`${item.peca.titulo || "Peça"} voltou ao calendário.`);
+  }
+
+  async function efetivarExclusao(id: string) {
+    const item = pendentes.current.get(id);
+    if (!item) return;
+    pendentes.current.delete(id);
+    item.soltar();
+    setDesfazer((atual) => (atual?.id === id ? null : atual));
+    if (preview || id.startsWith("local-")) {
+      setOcultas((atual) => atual.filter((itemId) => itemId !== id));
+      return;
+    }
+    const falha = await excluirPecaNoBanco(id);
+    if (falha) {
+      setOcultas((atual) => atual.filter((itemId) => itemId !== id));
+      setPecasLocais((atual) => (atual.some((peca) => peca.id === item.peca.id) ? atual : [...atual, item.peca]));
+      setResumoLocal((atual) => (atual.some((peca) => peca.id === item.resumo.id) ? atual : [...atual, item.resumo]));
+      setErro(falha);
+      return;
+    }
+    setOcultas((atual) => atual.filter((itemId) => itemId !== id));
+  }
+
+  function segurar() {
+    silencio.current += 1;
+    let aberto = true;
+    return () => {
+      if (!aberto) return;
+      aberto = false;
+      silencio.current = Math.max(0, silencio.current - 1);
+    };
   }
 
   function aoSoltar(evento: DragEndEvent) {
@@ -266,6 +375,11 @@ export function PainelCalendario({
         <div>
           <Titulo>Calendário</Titulo>
           <p className="mt-3 text-paper">{cidade}</p>
+          {inicio && fim && fim >= inicio ? (
+            <p className="mt-2 text-sm text-gold">
+              Temporada de {diasInclusivos(inicio, fim)} {diasInclusivos(inicio, fim) === 1 ? "dia" : "dias"}, {rotuloDiaMes(inicio)} a {rotuloDiaMes(fim)}
+            </p>
+          ) : null}
         </div>
         <p className="cartao-circo inline-flex max-w-xl items-center rounded-full px-4 py-2 text-gold">{fraseHorizonte(horizonte, hoje)}</p>
       </div>
@@ -368,6 +482,7 @@ export function PainelCalendario({
               hoje={hoje}
               pecas={pecasLocais.filter((peca) => peca.data === dia).sort(ordenar)}
               lacuna={vazios.has(dia)}
+              naTemporada={estaNaTemporada(dia, inicio, fim)}
               noHorizonte={Boolean(primeiraData && horizonte && dia >= primeiraData && dia <= horizonte)}
               onAbrir={() => abrir(dia)}
             />
@@ -383,11 +498,12 @@ export function PainelCalendario({
         preview={preview}
         autorNome={autorNome}
         onFechar={fechar}
-        onSalvar={salvar}
-        onCriar={() => {
-          if (diaAberto) void criar(diaAberto);
-        }}
+        onGuardar={guardar}
+        onConcluir={(id, valor) => salvar(id, "concluido", valor)}
+        onCriar={criar}
+        onExcluir={agendarExclusao}
       />
+      {desfazer ? <AvisoDesfazer mensagem={`“${desfazer.titulo}” saiu do dia.`} onDesfazer={desfazerExclusao} /> : null}
     </div>
   );
 }
@@ -403,6 +519,39 @@ function alterar(peca: PecaLista, campo: string, valor: string | boolean | null,
     };
   }
   return { ...peca, [campo]: valor };
+}
+
+function resumoDe(peca: PecaLista): ResumoPeca {
+  return {
+    id: peca.id,
+    data: peca.data,
+    tipo: peca.tipo,
+    status: peca.status,
+    concluido: peca.concluido,
+    concluido_por: peca.concluido_por,
+    titulo: peca.titulo,
+  };
+}
+
+function estaNaTemporada(dia: string, inicio: string | null, fim: string | null) {
+  if (!inicio && !fim) return false;
+  if (inicio && dia < inicio) return false;
+  if (fim && dia > fim) return false;
+  return true;
+}
+
+function lacunasDaTemporada(pecas: ResumoPeca[], hoje: string, inicio: string | null, fim: string | null) {
+  const dentro = noPeriodo(pecas, inicio, fim);
+  if (inicio && fim && fim >= inicio && fim >= hoje) {
+    const de = hoje > inicio ? hoje : inicio;
+    const ocupados = new Set(dentro.map((peca) => peca.data));
+    const dias: string[] = [];
+    for (let dia = de; dia <= fim; dia = somarDias(dia, 1)) {
+      if (!ocupados.has(dia)) dias.push(dia);
+    }
+    return dias;
+  }
+  return lacunas(dentro, hoje, horizonteDe(dentro));
 }
 
 function ordenar(a: PecaLista, b: PecaLista) {
@@ -446,6 +595,7 @@ function Celula({
   hoje,
   pecas,
   lacuna,
+  naTemporada,
   noHorizonte,
   onAbrir,
 }: {
@@ -454,6 +604,7 @@ function Celula({
   hoje: string;
   pecas: PecaLista[];
   lacuna: boolean;
+  naTemporada: boolean;
   noHorizonte: boolean;
   onAbrir: () => void;
 }) {
@@ -467,6 +618,7 @@ function Celula({
         "flex min-h-16 flex-col rounded-xl border border-white/10 p-1 md:min-h-28 md:p-2",
         dia === hoje && "ring-1 ring-gold",
         lacuna && "border-dashed border-crimson",
+        naTemporada && "border-gold/60",
         noHorizonte && "bg-gold/10",
         isOver && "border-turquoise bg-turquoise/10",
         fora && "opacity-35",

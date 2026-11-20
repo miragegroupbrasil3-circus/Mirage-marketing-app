@@ -3,10 +3,20 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { Contador } from "@/components/motion/contador";
 
-export function FaixaProgresso({ feitas, total, rotulo }: { feitas: number; total: number; rotulo: string }) {
+export function FaixaProgresso({
+  feitas,
+  total,
+  rotulo,
+  vazio,
+}: {
+  feitas: number;
+  total: number;
+  rotulo: string;
+  vazio?: string;
+}) {
   const reduzir = useReducedMotion();
   if (total === 0) {
-    return <p className="text-sm text-mist">{rotulo}: nenhuma peça neste período.</p>;
+    return <p className="text-sm text-mist">{vazio ?? `${rotulo}: nenhuma peça neste período.`}</p>;
   }
   const pct = (feitas / total) * 100;
   return (

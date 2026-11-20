@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { slugificar } from "@/lib/caminho";
+import { hojeISO, rotuloDiaMes } from "@/lib/datas";
 import { criarClienteNavegador } from "@/lib/supabase/client";
-import type { Praca } from "@/lib/tipos";
+import { fimAjustado, gravarTemporadaPrevia, resumoTemporada } from "@/lib/temporada";
+import type { MarcoConteudo, Praca } from "@/lib/tipos";
 
 type Rascunho = {
   cidade: string;
@@ -14,12 +16,44 @@ type Rascunho = {
   ativa: boolean;
 };
 
-const vazio: Rascunho = { cidade: "", temporada: "", inicio: "", fim: "", ativa: true };
+type Marcos = { pecas: MarcoConteudo[]; demandas: MarcoConteudo[] };
 
-export function PainelPracas({ iniciais, preview }: { iniciais: Praca[]; preview: boolean }) {
+const vazio: Rascunho = { cidade: "", temporada: "", inicio: "", fim: "", ativa: true };
+const semMarcos: Marcos = { pecas: [], demandas: [] };
+
+export function PainelPracas({
+  iniciais,
+  preview,
+  marcos,
+}: {
+  iniciais: Praca[];
+  preview: boolean;
+  marcos: Record<string, Marcos>;
+}) {
   const router = useRouter();
+  const assinatura = iniciais.map((praca) => `${praca.id}:${praca.inicio}:${praca.fim}:${praca.cidade}:${praca.ativa}`).join("|");
   const [pracas, setPracas] = useState(iniciais);
+  const [vista, setVista] = useState(assinatura);
   const [erro, setErro] = useState<string | null>(null);
+
+  if (assinatura !== vista) {
+    setVista(assinatura);
+    setPracas(iniciais);
+  }
+
+  useEffect(() => {
+    if (preview) return;
+    const supabase = criarClienteNavegador();
+    const canal = supabase
+      .channel("pracas-temporada")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pracas" }, () => {
+        router.refresh();
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(canal);
+    };
+  }, [preview, router]);
 
   async function criar(rascunho: Rascunho) {
     const mensagem = validar(rascunho);
@@ -67,41 +101,31 @@ export function PainelPracas({ iniciais, preview }: { iniciais: Praca[]; preview
     const mensagem = validar(rascunho);
     if (mensagem) {
       setErro(mensagem);
-      return;
+      return false;
     }
+    const proxima = {
+      cidade: rascunho.cidade.trim(),
+      temporada: rascunho.temporada.trim() || null,
+      inicio: rascunho.inicio || null,
+      fim: rascunho.fim || null,
+      ativa: rascunho.ativa,
+    };
     if (preview) {
-      setPracas((atual) =>
-        atual.map((item) =>
-          item.id === praca.id
-            ? {
-                ...item,
-                cidade: rascunho.cidade.trim(),
-                temporada: rascunho.temporada.trim() || null,
-                inicio: rascunho.inicio || null,
-                fim: rascunho.fim || null,
-                ativa: rascunho.ativa,
-              }
-            : item,
-        ),
-      );
-      return;
-    }
-    const supabase = criarClienteNavegador();
-    const { error } = await supabase
-      .from("pracas")
-      .update({
-        cidade: rascunho.cidade.trim(),
-        temporada: rascunho.temporada.trim() || null,
-        inicio: rascunho.inicio || null,
-        fim: rascunho.fim || null,
-        ativa: rascunho.ativa,
-      })
-      .eq("id", praca.id);
-    if (error) setErro("Não foi possível guardar a praça.");
-    else {
+      gravarTemporadaPrevia(rascunho.inicio, rascunho.fim);
+      setPracas((atual) => atual.map((item) => (item.id === praca.id ? { ...item, ...proxima } : item)));
       setErro(null);
       router.refresh();
+      return true;
     }
+    const supabase = criarClienteNavegador();
+    const { error } = await supabase.from("pracas").update(proxima).eq("id", praca.id);
+    if (error) {
+      setErro("Não foi possível guardar a praça.");
+      return false;
+    }
+    setErro(null);
+    router.refresh();
+    return true;
   }
 
   return (
@@ -111,7 +135,7 @@ export function PainelPracas({ iniciais, preview }: { iniciais: Praca[]; preview
           {erro}
         </p>
       ) : null}
-      <Formulario titulo="Nova praça" inicial={vazio} acao="Criar praça" onSalvar={criar} />
+      <Formulario titulo="Nova praça" inicial={vazio} acao="Criar praça" marcos={semMarcos} onSalvar={criar} />
       <ul className="flex flex-col gap-14">
         {pracas.map((praca) => (
           <li key={praca.id} className="border-t border-line-soft pt-8">
@@ -126,7 +150,8 @@ export function PainelPracas({ iniciais, preview }: { iniciais: Praca[]; preview
                 fim: praca.fim ?? "",
                 ativa: praca.ativa,
               }}
-              acao="Salvar praça"
+              acao="Salvar"
+              marcos={marcos[praca.id] ?? semMarcos}
               onSalvar={(rascunho) => salvar(praca, rascunho)}
             />
           </li>
@@ -140,19 +165,32 @@ function Formulario({
   titulo,
   inicial,
   acao,
+  marcos,
   onSalvar,
 }: {
   titulo: string;
   inicial: Rascunho;
   acao: string;
+  marcos: Marcos;
   onSalvar: (rascunho: Rascunho) => Promise<boolean | void>;
 }) {
   const [rascunho, setRascunho] = useState(inicial);
+  const [base, setBase] = useState(inicial);
   const [pendente, setPendente] = useState(false);
+  const sujo = !igual(rascunho, base);
+
+  if (!igual(inicial, base) && igual(rascunho, base)) {
+    setBase(inicial);
+    setRascunho(inicial);
+  }
 
   function campo<K extends keyof Rascunho>(chave: K, valor: Rascunho[K]) {
     setRascunho((atual) => ({ ...atual, [chave]: valor }));
   }
+
+  const hoje = hojeISO();
+  const periodo = resumoTemporada(rascunho.inicio, rascunho.fim, marcos.pecas, marcos.demandas);
+  const erroDatas = rascunho.inicio && rascunho.fim && rascunho.fim < rascunho.inicio ? "O fim não pode ser antes do início." : null;
 
   return (
     <form
@@ -161,6 +199,7 @@ function Formulario({
         evento.preventDefault();
         setPendente(true);
         const ok = await onSalvar(rascunho);
+        if (ok) setBase(acao === "Criar praça" ? vazio : rascunho);
         if (ok && acao === "Criar praça") setRascunho(vazio);
         setPendente(false);
       }}
@@ -170,16 +209,65 @@ function Formulario({
       <Campo id={`${titulo}-temporada`} rotulo="Temporada" valor={rascunho.temporada} onChange={(valor) => campo("temporada", valor)} />
       <div className="grid gap-6 sm:grid-cols-2">
         <Campo id={`${titulo}-inicio`} rotulo="Início" tipo="date" valor={rascunho.inicio} onChange={(valor) => campo("inicio", valor)} />
-        <Campo id={`${titulo}-fim`} rotulo="Fim" tipo="date" valor={rascunho.fim} onChange={(valor) => campo("fim", valor)} />
+        <div>
+          <Campo id={`${titulo}-fim`} rotulo="Fim" tipo="date" valor={rascunho.fim} onChange={(valor) => campo("fim", valor)} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="botao px-3 text-sm"
+              onClick={() => campo("fim", fimAjustado(rascunho.fim, rascunho.inicio, -7, hoje))}
+            >
+              -7 dias
+            </button>
+            <button
+              type="button"
+              className="botao px-3 text-sm"
+              onClick={() => campo("fim", fimAjustado(rascunho.fim, rascunho.inicio, 7, hoje))}
+            >
+              +7 dias
+            </button>
+          </div>
+        </div>
       </div>
+      {periodo.dias != null ? (
+        <p className="text-paper">
+          Esta temporada tem <span className="num text-gold">{periodo.dias}</span> {periodo.dias === 1 ? "dia" : "dias"}
+          {rascunho.inicio && rascunho.fim ? `, de ${rotuloDiaMes(rascunho.inicio)} a ${rotuloDiaMes(rascunho.fim)}` : ""}.
+        </p>
+      ) : (
+        <p className="text-sm text-mist">Informe início e fim para ver quantos dias a temporada tem.</p>
+      )}
+      {erroDatas ? (
+        <p role="alert" className="text-gold">
+          {erroDatas}
+        </p>
+      ) : null}
+      {erroDatas ? null : <AvisoFora pecas={periodo.pecasFora} demandas={periodo.demandasFora} />}
       <label className="flex min-h-11 items-center gap-3 text-paper">
         <input type="checkbox" checked={rascunho.ativa} onChange={(evento) => campo("ativa", evento.target.checked)} />
         Ativa
       </label>
-      <button type="submit" className="botao self-start" disabled={pendente}>
-        {pendente ? "Salvando…" : acao}
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" className="botao self-start" disabled={pendente || !sujo}>
+          {pendente ? "Salvando…" : acao}
+        </button>
+        {sujo ? <p className="text-sm text-gold">Alterações não salvas</p> : null}
+      </div>
     </form>
+  );
+}
+
+function AvisoFora({ pecas, demandas }: { pecas: MarcoConteudo[]; demandas: MarcoConteudo[] }) {
+  if (pecas.length === 0 && demandas.length === 0) return null;
+  const nomes = [...pecas.map((item) => item.titulo), ...demandas.map((item) => item.titulo)].slice(0, 4);
+  const pecasTexto = pecas.length === 1 ? "1 peça" : `${pecas.length} peças`;
+  const demandasTexto = demandas.length === 1 ? "1 demanda" : `${demandas.length} demandas`;
+  const contagem = [pecas.length ? pecasTexto : "", demandas.length ? demandasTexto : ""].filter(Boolean).join(" e ");
+  return (
+    <p role="status" className="rounded-2xl border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-paper">
+      Fora do novo período: {contagem}. Dá para salvar mesmo assim — nada é apagado.
+      {nomes.length > 0 ? <span className="mt-1 block text-gold">{nomes.join(" · ")}</span> : null}
+    </p>
   );
 }
 
@@ -208,8 +296,12 @@ function Campo({
   );
 }
 
+function igual(a: Rascunho, b: Rascunho) {
+  return a.cidade === b.cidade && a.temporada === b.temporada && a.inicio === b.inicio && a.fim === b.fim && a.ativa === b.ativa;
+}
+
 function validar(rascunho: Rascunho) {
   if (!rascunho.cidade.trim()) return "Diga a cidade.";
-  if (rascunho.inicio && rascunho.fim && rascunho.fim < rascunho.inicio) return "O fim precisa ser depois do início.";
+  if (rascunho.inicio && rascunho.fim && rascunho.fim < rascunho.inicio) return "O fim não pode ser antes do início.";
   return null;
 }

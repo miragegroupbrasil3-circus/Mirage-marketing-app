@@ -24,9 +24,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Moldura } from "@/components/marca/moldura";
+import { RascunhoPeca } from "@/components/peca/rascunho";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { horarioCurto, rotuloDia, rotuloDiaCurto, rotuloNumero, somarDias } from "@/lib/datas";
 import { slugPeca } from "@/lib/caminho";
+import { payloadPeca, validarCamposPeca, type CamposPeca } from "@/lib/peca-campos";
 import { ROTULO_PILAR, ROTULO_STATUS, ROTULO_TIPO } from "@/lib/rotulos";
 import { cx } from "@/lib/cx";
 import { FaixaProgresso } from "@/components/progresso/faixa";
@@ -80,6 +82,7 @@ function QuadroVivo({
   const [erro, setErro] = useState<string | null>(null);
   const [anuncio, setAnuncio] = useState("");
   const [estreito, setEstreito] = useState(false);
+  const [rascunho, setRascunho] = useState<{ data: string; status: StatusPeca } | null>(null);
 
   const sensores = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -179,60 +182,51 @@ function QuadroVivo({
     });
   }
 
-  async function criar(data: string, status: StatusPeca) {
+  async function criar(campos: CamposPeca) {
+    const falha = validarCamposPeca(campos);
+    if (falha) return falha;
     setErro(null);
-    const irmas = pecas.filter((peca) => (visao === "dia" ? peca.data === data : peca.status === status));
+    const payload = payloadPeca(campos);
+    const irmas = pecas.filter((peca) => (visao === "dia" ? peca.data === payload.data : peca.status === payload.status));
     const ordem = irmas.reduce((max, peca) => Math.max(max, peca.ordem), -1) + 1;
-    const tipo = "reels" as const;
-    if (preview) {
-      const agora = new Date().toISOString();
-      setPecas((atual) => [
-        ...atual,
-        {
-          id: `local-${crypto.randomUUID()}`,
-          praca_id: pracaId,
-          semana_id: null,
-          data,
-          horario: null,
-          tipo,
-          titulo: "Nova peça",
-          legenda: "",
-          cta: null,
-          pilar: "espetaculo",
-          status,
-          ordem,
-          slug: slugPeca(tipo),
-          criado_por: null,
-          atualizado_por: null,
-          concluido: false,
-          concluido_por: null,
-          concluido_em: null,
-          criado_em: agora,
-          atualizado_em: agora,
-          midiaFinal: null,
-          notas: 0,
-        },
-      ]);
-      return;
-    }
+    const agora = new Date().toISOString();
+    const temporaria: PecaGrade = {
+      id: `local-${crypto.randomUUID()}`,
+      praca_id: pracaId,
+      semana_id: null,
+      ...payload,
+      ordem,
+      slug: slugPeca(payload.tipo),
+      criado_por: null,
+      atualizado_por: null,
+      concluido: false,
+      concluido_por: null,
+      concluido_em: null,
+      criado_em: agora,
+      atualizado_em: agora,
+      midiaFinal: null,
+      notas: 0,
+    };
+    setPecas((atual) => [...atual, temporaria]);
+    if (preview) return null;
 
     const supabase = criarClienteNavegador();
-    const { error } = await supabase.from("pecas").insert({
-      praca_id: pracaId,
-      data,
-      tipo,
-      titulo: "Nova peça",
-      legenda: "",
-      pilar: "espetaculo",
-      status,
-      ordem,
-      slug: slugPeca(tipo),
-    });
-    if (error) {
-      setErro("Não foi possível criar a peça.");
-      return;
+    const { data, error } = await supabase
+      .from("pecas")
+      .insert({
+        praca_id: pracaId,
+        ...payload,
+        ordem,
+        slug: temporaria.slug,
+      })
+      .select("id")
+      .single();
+    if (error || !data) {
+      setPecas((atual) => atual.filter((peca) => peca.id !== temporaria.id));
+      return "Não foi possível criar a peça.";
     }
-    router.refresh();
+    setPecas((atual) => atual.map((peca) => (peca.id === temporaria.id ? { ...peca, id: data.id } : peca)));
+    return null;
   }
 
   return (
@@ -267,10 +261,10 @@ function QuadroVivo({
               coluna={coluna}
               ocultaNoCelular={visao === "dia" && coluna.idDom !== foco}
               onCriar={() =>
-                criar(
-                  visao === "dia" ? coluna.chave.slice(4) : dias[0],
-                  visao === "status" ? (coluna.chave.slice(7) as StatusPeca) : "ideia",
-                )
+                setRascunho({
+                  data: visao === "dia" ? coluna.chave.slice(4) : foco,
+                  status: visao === "status" ? (coluna.chave.slice(7) as StatusPeca) : "ideia",
+                })
               }
             />
           ))}
@@ -278,6 +272,16 @@ function QuadroVivo({
         {ativoId && estreito && visao === "dia" ? <Bordas arrastando /> : null}
         <DragOverlay>{ativo ? <CartaoConteudo peca={ativo} overlay /> : null}</DragOverlay>
       </DndContext>
+      {rascunho ? (
+        <RascunhoPeca
+          key={`${rascunho.data}:${rascunho.status}`}
+          aberto
+          data={rascunho.data}
+          status={rascunho.status}
+          onFechar={() => setRascunho(null)}
+          onSalvar={criar}
+        />
+      ) : null}
     </div>
   );
 }

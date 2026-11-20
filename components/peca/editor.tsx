@@ -2,16 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Moldura } from "@/components/marca/moldura";
+import { BarraSalvar, CamposPecaForm } from "@/components/peca/campos";
 import { BotaoConcluir } from "@/components/peca/concluir";
 import { Notas } from "@/components/peca/notas";
+import { AvisoDesfazer, Confirmar } from "@/components/ui/confirmar";
 import { caminhoMidia } from "@/lib/caminho";
 import { quando } from "@/lib/datas";
 import { enviarParaStorage, medidasDoArquivo, tokenDeEnvio } from "@/lib/envio";
-import { ROTULO_CAMPO, ROTULO_PILAR, ROTULO_STATUS, ROTULO_TIPO, textoHistorico } from "@/lib/rotulos";
+import { excluirPecaNoBanco } from "@/lib/excluir-peca";
+import { camposDePeca, camposIguais, payloadPeca, validarCamposPeca, type CamposPeca } from "@/lib/peca-campos";
+import { ROTULO_CAMPO, textoHistorico } from "@/lib/rotulos";
 import { criarClienteNavegador } from "@/lib/supabase/client";
-import { LIMITE_ARQUIVO, mensagemArquivoGrande, PILARES, STATUS_PECA, TIPOS_PECA, type Comentario, type ItemHistorico, type Midia, type Peca, type Pilar, type StatusPeca, type TipoPeca } from "@/lib/tipos";
+import { LIMITE_ARQUIVO, mensagemArquivoGrande, type Comentario, type ItemHistorico, type Midia, type Peca } from "@/lib/tipos";
 
 const ACEITOS = ["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm"];
 
@@ -37,9 +41,26 @@ export function EditorPeca({
   const [enviando, setEnviando] = useState<{ nome: string; porcentagem: number } | null>(null);
   const [sobre, setSobre] = useState(false);
   const [locais, setLocais] = useState<Midia[]>(midias);
-  const [ajuste, setAjuste] = useState<Partial<Peca>>({});
+  const base = camposDePeca(peca);
+  const [form, setForm] = useState(base);
+  const [origem, setOrigem] = useState(base);
   const [trilha, setTrilha] = useState(historico);
-  const vista = { ...peca, ...ajuste };
+  const [pendente, setPendente] = useState(false);
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
+  const [desfazer, setDesfazer] = useState(false);
+  const [feito, setFeito] = useState(peca.concluido);
+  const [feitoOrigem, setFeitoOrigem] = useState(peca.concluido);
+  if (peca.concluido !== feitoOrigem) {
+    setFeitoOrigem(peca.concluido);
+    setFeito(peca.concluido);
+  }
+  const timerExclusao = useRef<number | null>(null);
+  if (!camposIguais(base, origem)) {
+    const editando = !camposIguais(form, origem);
+    setOrigem(base);
+    if (!editando) setForm(base);
+  }
+  const sujo = !camposIguais(form, origem);
 
   useEffect(() => {
     if (preview) return;
@@ -54,26 +75,65 @@ export function EditorPeca({
     };
   }, [peca.id, preview, router]);
 
-  async function salvar(campo: string, valor: string | boolean | null) {
+  useEffect(() => {
+    return () => {
+      if (timerExclusao.current != null && !preview) {
+        window.clearTimeout(timerExclusao.current);
+        void excluirPecaNoBanco(peca.id);
+      }
+    };
+  }, [peca.id, preview]);
+
+  async function guardar(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+    const falha = validarCamposPeca(form);
+    if (falha) {
+      setErro(falha);
+      return;
+    }
     setErro(null);
+    const payload = payloadPeca(form);
     if (preview) {
-      setAjuste((atual) => {
-        const proximo = { ...atual, [campo]: valor } as Partial<Peca>;
-        if (campo === "concluido") {
-          const feito = Boolean(valor);
-          proximo.concluido = feito;
-          proximo.concluido_por = feito ? peca.criado_por : null;
-          proximo.concluido_em = feito ? new Date().toISOString() : null;
-        }
-        return proximo;
-      });
+      const mudancas = (Object.keys(payload) as (keyof CamposPeca)[]).filter((campo) => form[campo] !== origem[campo]);
+      setTrilha((atual) => [
+        ...mudancas.map((campo) => ({
+          id: `local-${crypto.randomUUID()}`,
+          peca_id: peca.id,
+          autor_id: null,
+          campo,
+          antes: origem[campo] || null,
+          depois: form[campo] || null,
+          criado_em: new Date().toISOString(),
+          autor_nome: autorNome,
+        })),
+        ...atual,
+      ]);
+      setOrigem(form);
+      return;
+    }
+    setPendente(true);
+    const supabase = criarClienteNavegador();
+    const { error } = await supabase.from("pecas").update(payload).eq("id", peca.id);
+    setPendente(false);
+    if (error) {
+      setErro("Não foi possível guardar.");
+      return;
+    }
+    setOrigem(form);
+    router.refresh();
+  }
+
+  async function concluir(valor: boolean) {
+    setErro(null);
+    setFeito(valor);
+    if (preview) {
       setTrilha((atual) => [
         {
           id: `local-${crypto.randomUUID()}`,
           peca_id: peca.id,
           autor_id: null,
-          campo,
-          antes: (peca as unknown as Record<string, unknown>)[campo] ?? null,
+          campo: "concluido",
+          antes: !valor,
           depois: valor,
           criado_em: new Date().toISOString(),
           autor_nome: autorNome,
@@ -83,10 +143,40 @@ export function EditorPeca({
       return null;
     }
     const supabase = criarClienteNavegador();
-    const { error } = await supabase.from("pecas").update({ [campo]: valor }).eq("id", peca.id);
-    if (error) return "Não foi possível guardar.";
+    const { error } = await supabase.from("pecas").update({ concluido: valor }).eq("id", peca.id);
+    if (error) {
+      setFeito(!valor);
+      return "Não foi possível guardar.";
+    }
     router.refresh();
     return null;
+  }
+
+  function pedirExclusao() {
+    setConfirmarExclusao(false);
+    setDesfazer(true);
+    timerExclusao.current = window.setTimeout(() => {
+      timerExclusao.current = null;
+      void concluirExclusao();
+    }, 5000);
+  }
+
+  function cancelarExclusao() {
+    if (timerExclusao.current != null) window.clearTimeout(timerExclusao.current);
+    timerExclusao.current = null;
+    setDesfazer(false);
+  }
+
+  async function concluirExclusao() {
+    if (!preview) {
+      const falha = await excluirPecaNoBanco(peca.id);
+      if (falha) {
+        setDesfazer(false);
+        setErro(falha);
+        return;
+      }
+    }
+    router.push(`/calendario?dia=${peca.data}`);
   }
 
   async function enviarArquivos(lista: File[]) {
@@ -103,8 +193,8 @@ export function EditorPeca({
       const versao = (preview ? locais.length : midias.length) + 1;
       const caminho = caminhoMidia({
         pracaSlug,
-        data: vista.data,
-        pecaSlug: vista.slug,
+        data: peca.data,
+        pecaSlug: peca.slug,
         versao,
         arquivo: arquivo.name,
       });
@@ -217,41 +307,13 @@ export function EditorPeca({
         </p>
       ) : null}
 
-      <CampoTexto rotulo="Título" valor={vista.titulo} destaque onSalvar={(valor) => salvar("titulo", valor)} />
-
-      <div className="grid gap-8 sm:grid-cols-2">
-        <CampoSelecao
-          rotulo="Estado"
-          valor={vista.status}
-          opcoes={STATUS_PECA.map((valor) => ({ valor, nome: ROTULO_STATUS[valor] }))}
-          onSalvar={(valor) => salvar("status", valor as StatusPeca)}
-        />
-        <CampoTexto
-          rotulo="Horário"
-          valor={vista.horario?.slice(0, 5) ?? ""}
-          onSalvar={(valor) => {
-            const horario = normalizarHorario(valor);
-            if (valor.trim() && !horario) return Promise.resolve("Use o formato 18:00.");
-            return salvar("horario", horario);
-          }}
-        />
-        <CampoTexto rotulo="Data" valor={vista.data} tipo="date" onSalvar={(valor) => salvar("data", valor)} />
-        <CampoSelecao
-          rotulo="Formato"
-          valor={vista.tipo}
-          opcoes={TIPOS_PECA.map((valor) => ({ valor, nome: ROTULO_TIPO[valor] }))}
-          onSalvar={(valor) => salvar("tipo", valor as TipoPeca)}
-        />
-        <CampoSelecao
-          rotulo="Pilar"
-          valor={vista.pilar}
-          opcoes={PILARES.map((valor) => ({ valor, nome: ROTULO_PILAR[valor] }))}
-          onSalvar={(valor) => salvar("pilar", valor as Pilar)}
-        />
-      </div>
-
-      <CampoTexto rotulo="Texto / roteiro" valor={vista.legenda} multilinha onSalvar={(valor) => salvar("legenda", valor)} />
-      <CampoTexto rotulo="Chamada" valor={vista.cta ?? ""} onSalvar={(valor) => salvar("cta", valor || null)} />
+      <form className="flex flex-col gap-8" onSubmit={guardar}>
+        <CamposPecaForm idPrefix={`editor-${peca.id}`} valor={form} onChange={setForm} destaque />
+        <BarraSalvar sujo={sujo} pendente={pendente} />
+        <button type="button" className="min-h-11 self-start text-crimson" onClick={() => setConfirmarExclusao(true)}>
+          Excluir peça
+        </button>
+      </form>
 
       <section>
         <h2 className="font-display text-3xl text-gold">Mídia</h2>
@@ -320,7 +382,7 @@ export function EditorPeca({
         </ul>
       </section>
 
-      <BotaoConcluir concluido={Boolean(vista.concluido)} onMudar={(valor) => salvar("concluido", valor)} />
+      <BotaoConcluir concluido={feito} onMudar={concluir} />
       <Notas pecaId={peca.id} iniciais={comentarios} preview={preview} autorNome={autorNome} />
 
       <section>
@@ -340,133 +402,15 @@ export function EditorPeca({
           ))}
         </ul>
       </section>
+      <Confirmar
+        aberto={confirmarExclusao}
+        titulo="Excluir peça?"
+        texto="A peça sai do calendário e o dia fica vazio se não houver outra. Comentários, histórico e arquivos também são removidos. O progresso recalcula."
+        confirmar="Excluir peça"
+        onCancelar={() => setConfirmarExclusao(false)}
+        onConfirmar={pedirExclusao}
+      />
+      {desfazer ? <AvisoDesfazer mensagem="Peça excluída." onDesfazer={cancelarExclusao} /> : null}
     </article>
-  );
-}
-
-function normalizarHorario(valor: string) {
-  const texto = valor.trim();
-  if (!texto) return null;
-  if (/^\d{2}:\d{2}$/.test(texto)) return texto;
-  return null;
-}
-
-function CampoTexto({
-  rotulo,
-  valor,
-  onSalvar,
-  destaque = false,
-  multilinha = false,
-  tipo = "text",
-}: {
-  rotulo: string;
-  valor: string;
-  onSalvar: (valor: string) => Promise<string | null>;
-  destaque?: boolean;
-  multilinha?: boolean;
-  tipo?: "text" | "date" | "time";
-}) {
-  const [aberto, setAberto] = useState(tipo !== "text");
-  const [rascunho, setRascunho] = useState(valor);
-  const [erro, setErro] = useState<string | null>(null);
-  const id = `campo-${rotulo}`;
-
-  async function confirmar(proximo = rascunho) {
-    if (proximo === valor) {
-      if (tipo === "text") setAberto(false);
-      return;
-    }
-    const falha = await onSalvar(proximo);
-    setErro(falha);
-    if (!falha && tipo === "text") setAberto(false);
-  }
-
-  return (
-    <div>
-      <label htmlFor={id} className="text-mist">
-        {rotulo}
-      </label>
-      {destaque && !aberto ? (
-        <h1>
-          <button
-            type="button"
-            className="font-display mt-1 block text-left text-4xl text-gold sm:text-5xl"
-            onClick={() => {
-              setRascunho(valor);
-              setAberto(true);
-            }}
-          >
-            {valor || "Sem título"}
-          </button>
-        </h1>
-      ) : multilinha ? (
-        <textarea
-          id={id}
-          className="campo"
-          value={rascunho}
-          onChange={(evento) => setRascunho(evento.target.value)}
-          onBlur={() => void confirmar()}
-        />
-      ) : (
-        <input
-          id={id}
-          type={tipo}
-          className="campo num"
-          value={tipo === "text" ? rascunho : valor}
-          onChange={(evento) => {
-            setRascunho(evento.target.value);
-            if (tipo !== "text") void confirmar(evento.target.value);
-          }}
-          onBlur={() => void confirmar()}
-          onKeyDown={(evento) => {
-            if (evento.key === "Enter" && tipo === "text") void confirmar();
-            if (evento.key === "Escape") {
-              setRascunho(valor);
-              setAberto(false);
-            }
-          }}
-          autoFocus={destaque}
-        />
-      )}
-      {erro ? <p className="mt-2 text-gold">{erro}</p> : null}
-    </div>
-  );
-}
-
-function CampoSelecao({
-  rotulo,
-  valor,
-  opcoes,
-  onSalvar,
-}: {
-  rotulo: string;
-  valor: string;
-  opcoes: { valor: string; nome: string }[];
-  onSalvar: (valor: string) => Promise<string | null>;
-}) {
-  const [erro, setErro] = useState<string | null>(null);
-  const id = `sel-${rotulo}`;
-  return (
-    <div>
-      <label htmlFor={id} className="text-mist">
-        {rotulo}
-      </label>
-      <select
-        id={id}
-        className="campo"
-        value={valor}
-        onChange={async (evento) => {
-          const falha = await onSalvar(evento.target.value);
-          setErro(falha);
-        }}
-      >
-        {opcoes.map((opcao) => (
-          <option key={opcao.valor} value={opcao.valor}>
-            {opcao.nome}
-          </option>
-        ))}
-      </select>
-      {erro ? <p className="mt-2 text-gold">{erro}</p> : null}
-    </div>
   );
 }

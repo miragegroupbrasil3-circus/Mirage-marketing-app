@@ -43,7 +43,7 @@ export function BotaoConcluir({
             : "bg-gradient-to-r from-gold via-amber to-magenta text-ink",
         )}
       >
-        {concluido ? "Concluída" : "Concluir"}
+        {concluido ? "Desmarcar concluído" : "Concluir"}
       </button>
       <p className="sr-only" aria-live="polite">
         {pulso > 0 && concluido ? "Peça concluída." : ""}
